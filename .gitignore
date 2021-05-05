@@ -37,3 +37,14 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+
+#files
+covariates/crop/data
+covariates/development/data
+covariates/ranch/data
+covariates/snow
+covariates/private/data
+movementData
+
+

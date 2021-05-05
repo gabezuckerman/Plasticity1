@@ -1,0 +1,295 @@
+---
+title: "Plasiticy figures"
+author: "Gabe Zuckerman"
+date: "4/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(data.table)
+library(tidyverse)
+library(cluster) 
+library(factoextra)
+library(ClusterR)
+library(fpc)
+library(ggalluvial)
+library(knitr)
+library(kableExtra)
+
+
+
+setwd("C:/Users/MiddletonLab/Desktop/Gabe/Box Sync/Elk/Plasticity1/")
+
+
+distances <- fread("movementData/distanceChangesWithCov.csv")
+```
+# Single year movements
+
+## Placement of elk-years on to bivariate distance/elevation spectrum
+
+We put 873 elk-years (from 377 elk) on to the distance/elevation spectrum.  This illustrates the variety of movement stratgies adopted by elk in the GYE. There is a nearly continuous range of movement across both the elevation change and geographic distance gradients.  This exemplifies a diverse migratory portfolio, without classifying distinct movement strategies.
+```{r placement, echo=F}
+distances$elk <- map_chr(distances$switchID, ~strsplit(.x, "_")[[1]][1])
+
+getIndYears <- function(row) {
+  test <- distances[row,]
+  
+  #extracting info from each row
+  years <- strsplit(strsplit(test$switchID[1], "_")[[1]], "-")[[2]]
+  dists <- c(test$sp1dist[1], test$sp2dist[1])
+  elevs <- c(test$sp1elev[1], test$sp2elev[1])
+  elk <- c(test$elk[1], test$elk[1])
+  
+  return(data.table(elk, years, dists, elevs))
+}
+
+allIndYears <- map_dfr(1:nrow(distances), getIndYears) %>% distinct(elk, years, .keep_all = T) %>%
+  mutate(absElev = abs(elevs))
+
+ggplot(allIndYears) + geom_point(aes(dists, absElev), alpha = .5) + ylab("Abosulte elevation change") +
+  xlab("Geographic distance") + theme_bw() + ggtitle("Figure 1.")
+
+```
+
+## Classification of behaviors along distance/elevation spectrum 
+
+However, we understand that there can be a need for labeling of distinct strategies.  Accordingly, we classified migratory behaviors using K-means with three clusters (see Appendix regarding cluster number choice; Lowrey et al 2020).  We were not able to distinguish between residents and short distance migrants.  Though, there were distinct elevational and long distance migrants.  
+```{r classify, echo=FALSE}
+
+forCluster <- allIndYears %>% dplyr::select(dists, absElev) %>% mutate(dists = scale(dists, center = T),
+                                                  absElev = scale(absElev, center = T))
+#kmeans with 3
+set.seed(1)
+
+k <- kmeans(forCluster, centers = 3, nstart = 25)
+allIndYears$cluster <- k$cluster
+
+allIndYears <- allIndYears %>% merge(data.table(cluster = 1:3, strategy = c("LDM", "EM", "R/SDM")))
+
+ggplot(allIndYears) + geom_point(aes(dists, absElev, color = as.factor(cluster)), alpha = .5) +
+  ylab("Abosulte elevation change") +   xlab("Geographic distance") + 
+  geom_text(x=22500, y=1250, label="Elev. M \n (n = 189 elk-years, 21.6%)") +
+  geom_text(x=22500, y=350, label="R/SDM \n(n = 485 elk-years, 55.6%)") +
+  geom_text(x = 75000, y = 1000, label = "LDM \n(n = 199 elk-years, 22.7%)") + 
+  theme_bw() + theme(legend.position = "none") + ggtitle("Figure 2.")
+  
+
+
+```
+
+
+# Multiyear movements
+
+## Plasitcity from one year to the next
+
+### Within distance/elevation spectrum
+
+The red dots represent the location in the distance/elevation spectrum in the first year of record, while the blue dots represent the location in the second year.  The arrow indicates the direction of change.
+
+```{r y2y plastic, echo=FALSE, fig.show="hold", out.width="50%"}
+ggplot(distances) + geom_point(aes(sp1dist, abs(sp1elev)), color = "red", alpha = .5) +
+  geom_point(aes(sp2dist, abs(sp2elev)), color = "blue", alpha = .5) +
+  geom_segment(aes(x = sp1dist, y = abs(sp1elev), 
+                   xend = sp2dist, yend = abs(sp2elev)),alpha = .2, 
+               arrow = arrow(length=unit(0.20,"cm"), type = "closed")) +
+  ylab("Absolute elevation change") + xlab("Geographic distance") + theme_bw() + theme(legend.position = "none") + ggtitle("Figure 3a.")
+
+#change to red center and blue arrow, with magnitude opacity
+ggplot(distances) + geom_segment(aes(x = 0, y = 0, xend = distanceDiff, yend= elevDiff), alpha = .2,
+                                 arrow = arrow(length = unit(0.05, "inches"))) +
+  geom_point(aes(x = distanceDiff, y = elevDiff), color = "blue", alpha = .2) +
+    geom_point(aes(x = 0, y = 0), color = "red", size = 4, alpha = .25) +
+  xlab("Difference in distance from year 1 to year 2") + 
+  ylab("Difference in elevation change from year 1 to year 2") +
+  geom_text(x = 50000, y = 2000, label = "Increased distance and  \n elevation change \n (28.9%)", size = 3) +
+  geom_text(x = 50000, y = -2300, label = "Increased distance and  \n decreased elevation change \n (20.2%)", size = 3) +
+  geom_text(x = -35000, y = -2000, label = "Decreased distance and  \n elevation change \n (30.5%)", size = 3) +
+  geom_text(x = -35000, y = 1000, label = "Decreased distance and  \n increased elevation change \n (19.6%)", size = 3) +
+  theme_bw() + ggtitle("Figure 3b.")
+
+
+```
+
+### And in classified behaviors
+
+
+The left plot shows the all the classified strategies, with arrows indicating strategy from one year to the next, and dark arrows representing a change in stratgy.  The right hand plot focus on the changes in strategy, of which there were 102 (20.6% overall, 21.5% yearly, SD = 7.4%).
+```{r y2y classified changes, echo=FALSE, warning = FALSE, fig.show="hold", out.width="50%"}
+
+getY2Y <- function(id){
+  t <- allIndYears %>% arrange(years) %>% filter(elk == id) %>%
+    dplyr::select(elk, years, strategy)
+  year1 <- c()
+  year2 <- c()
+  strat1 <- c()
+  strat2 <- c()
+  for (i in 1:(nrow(t)-1)) {
+    year1 <- c(year1, t$years[i])
+    year2 <- c(year2, t$years[i+1])
+    strat1 <- c(strat1, t$strategy[i])
+    strat2 <- c(strat2, t$strategy[i+1])
+
+  }
+  return(data.table(id, year1, year2, strat1, strat2))
+}
+
+y2y <- map_dfr(unique(allIndYears$elk), getY2Y)
+
+#merging to find yearly switch rate
+multibursts <- fread("../Switching3/movementData/multiburstsNC.csv") %>%
+  distinct(id = gps_sensors_animals_id, year1 = year, startDateYear)
+
+y2y <- y2y %>% mutate(year1 = as.numeric(year1), id = as.numeric(id)) %>% merge(multibursts %>% filter)
+
+yearly <- y2y %>% mutate(switch = !(strat1 == strat2)) %>% group_by(startDateYear) %>%
+  summarise(switches = sum(switch), n = n()) %>% mutate(switchRate = switches/n)
+
+
+
+
+forAlluv <- y2y %>% group_by(strat1, strat2) %>% dplyr::summarise(n = n())
+
+distances <- distances %>% merge(
+  y2y %>% rename(elk = id) %>% mutate(switchID = paste0(elk, "_", year1, "-", year2)) %>%
+  dplyr::select(switchID, strat1, strat2)
+) %>% mutate(switch =!(strat1 == strat2))
+
+
+ggplot(distances) + geom_point(aes(sp1dist, abs(sp1elev), color = strat1), alpha = .5) +
+  geom_point(aes(sp2dist, abs(sp2elev), color = strat2), alpha = .5) +
+  geom_segment(data = distances %>% filter(switch), aes(x = sp1dist, y = abs(sp1elev), 
+                   xend = sp2dist, yend = abs(sp2elev)),alpha = .25, 
+               arrow = arrow(length=unit(0.20,"cm"), type = "closed")) +
+  geom_segment(data = distances %>% filter(!switch), aes(x = sp1dist, y = abs(sp1elev), 
+                   xend = sp2dist, yend = abs(sp2elev)),alpha = .05, 
+               arrow = arrow(length=unit(0.20,"cm"), type = "closed")) + 
+  ylab("Absolute elevation change") + xlab("Geographic distance") + theme_bw() + 
+theme(legend.position = "none") + ggtitle("Figure 4a.")
+
+ggplot(forAlluv %>% filter(strat1 != strat2),
+       aes(y = n, axis1 = strat1, axis2 = strat2)) +
+  geom_alluvium(aes(fill = strat1), width = 1/12) +
+  geom_stratum(width = 1/12, fill = "black", color = "grey") +
+  geom_label(stat = "stratum", 
+             aes(label = after_stat(paste0(stratum, "\n n = ", c(41, 21, 40, 45, 22, 35) )))) +
+  theme_bw() + ylab("") + xlab("") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.ticks = element_blank(), axis.text = element_blank(),
+        panel.border = element_blank()) + 
+  labs(fill = "Strategy") + scale_y_continuous(breaks = seq(0, 100, 10)) + 
+  ggtitle("Figure 4b.") +
+  geom_text(x = 1.09, y = 97, label = "10") +
+  geom_text(x = 1.09, y = 78, label = "30") +
+  geom_text(x = 1.09, y = 60, label = "6") +
+  geom_text(x = 1.09, y = 48, label = "15") +
+  geom_text(x = 1.09, y = 27, label = "29") +
+  geom_text(x = 1.09, y = 7, label = "12")
+
+
+```
+
+```{r y2y classified balance, echo=FALSE, warning = FALSE, fig.show="hold", out.width="50%"}
+
+balance1 <- y2y %>%
+  group_by(startDateYear, strat1, strat2) %>% dplyr::summarize(n = n()) %>%
+  group_by(startDateYear, strat = strat1) %>% summarise(from = sum(n))
+
+balance2 <- y2y %>% 
+  group_by(startDateYear, strat1, strat2) %>% dplyr::summarize(n = n()) %>%
+  group_by(startDateYear, strat = strat2) %>% summarise(to = sum(n))
+
+balance <- merge(balance1, balance2) %>% 
+  mutate(years = paste(startDateYear + 1, startDateYear+2, sep = "-")) %>%
+  dplyr::select(years, strategy = strat, from, to) %>% mutate(balance = to - from)
+
+balance %>% kable(align = 'c', col.names = colnames(.)) %>%
+  kable_styling(bootstrap_options = "striped") %>% scroll_box(height = "400px", width = "800px") 
+
+# balance %>% group_by(strategy) %>% summarise(`Average balance` = mean(balance)) %>% 
+#   kable(align = 'c', col.names = colnames(.)) %>% kable_styling(bootstrap_options = "striped") %>%
+#   scroll_box(height = "200px", width = "400px") %>% kable_styling(full_width = FALSE, position = "left")
+```
+## What contributes to increased or decreased plasticty?
+
+We modeled the magnitude of shift in the location from one year to the next (ie, the length of the arrows in Figures 3a and 3b).  This metric is indicative of how big of a change an elk made from one year to the next, but not of the direction of that change.
+
+
+``` {r initialCorr, echo = F}
+
+distances %>% dplyr::select("hyp","herdDiversity","propCrop","migDev","winterDev","feedAccess",  
+,"meanDFP","propPrivate","maxSnow" )
+
+
+a <- ggplot(distances) + geom_point(aes(herdDiversity, hyp)) + theme_bw() +
+  xlab("Herd diversity") + ylab("Magnitude of shift")
+b <- ggplot(distances) + geom_point(aes(propCrop, hyp)) + theme_bw() +
+  xlab("Proportion of cropland in second winter range") + ylab("Magnitude of shift")
+
+c <- ggplot(distances) + geom_point(aes(migDev, hyp)) + theme_bw() +
+  xlab("Proportion of developed land during migratory period") + ylab("Magnitude of shift")
+
+d <- ggplot(distances) + geom_point(aes(winterDev, hyp)) + theme_bw() +
+  xlab("Proportion of developed land in second winter range") + ylab("Magnitude of shift")
+
+e <- ggplot(distances) + 
+  geom_dotplot(aes(x = as.factor(feedAccess), y = hyp), binaxis = "y", stackdir = "center", binwidth = 1000) + 
+  theme_bw() +
+  xlab("Access to feed grounds second winter range") + ylab("Magnitude of shift")
+
+f <- ggplot(distances) + geom_point(aes(meanDFP, hyp)) + theme_bw() +
+  xlab("Mean DFP during migratory period") + ylab("Magnitude of shift")
+
+g <- ggplot(distances) + geom_point(aes(propPrivate, hyp)) + theme_bw() +
+  xlab("Proportion of non-developed, non-crop land in second winter range") + ylab("Magnitude of shift")
+
+h <- ggplot(distances) + geom_point(aes(maxSnow, hyp)) + theme_bw() +
+  xlab("Maximum snow depth during migratory period") + ylab("Magnitude of shift")
+
+
+ggpubr::ggarrange(a, b, c, d, e, f, g, h, ncol = 3, nrow = 2)
+
+```
+
+
+## Appendix
+
+We performed k-means on scaled and centered data.  We evaluted the plots to identify k, such that the within group sum of squared Euclidean distances was minimized, but the between group sum of squared distances was maximized. Between and within group sum of squares intersected between 2 and 3, indicating that the ideal number of clusters to balance the two was either two or three. 
+
+```{r classify supp info 1, echo=FALSE}
+
+forCluster <- allIndYears %>% dplyr::select(dists, absElev) %>% mutate(dists = scale(dists, center = T),
+                                                  absElev = scale(absElev, center = T))
+
+#turn into linked plots
+getClusterStats <- function(numCenters) {
+  k <- kmeans(forCluster, centers = numCenters, nstart = 25)
+
+  return(data.table(num = numCenters, within = k$tot.withinss, between = k$betweenss))
+}
+
+clusterStats <- map_dfr(1:10, getClusterStats)
+
+
+
+ ggplot(clusterStats) + geom_point(aes(num, within), color = "blue") + 
+   geom_line(aes(num, within), color = "blue") + 
+  xlab("Number of clusters (k)") + ylab("Total within group sum of squares") +
+  scale_x_continuous(breaks = 1:10) + geom_vline(aes(xintercept = 2.24), linetype = "dashed") +
+  geom_point(aes(num, between), color = "red") + geom_line(aes(num, between), color = "red") +
+   scale_y_continuous(name = "Total within group sum of squares", 
+                      sec.axis = sec_axis(~., name="Total between group sum of squares")) +
+   theme(axis.title.y.right = element_text(color = "red"),
+         axis.title.y = element_text(color = "blue"))
+
+```
+
+Below are cluster plots with 2 and 3 clusters.  Using three clusters provided a more ecologically meaningful grouping.
+
+```{r classify supp info 2, echo=FALSE, fig.show="hold", out.width="50%"}
+k2 <- kmeans(forCluster, centers = 2, nstart = 25)
+k3 <- kmeans(forCluster, centers = 3, nstart = 25)
+
+fviz_cluster(k2, forCluster)
+fviz_cluster(k3, forCluster)
+
+```
