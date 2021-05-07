@@ -15,6 +15,9 @@ library(fpc)
 library(ggalluvial)
 library(knitr)
 library(kableExtra)
+library(usdm)
+library(furrr)
+library(caret)
 
 
 
@@ -104,7 +107,7 @@ ggplot(distances) + geom_segment(aes(x = 0, y = 0, xend = distanceDiff, yend= el
   geom_text(x = 50000, y = 2000, label = "Increased distance and  \n elevation change \n (28.9%)", size = 3) +
   geom_text(x = 50000, y = -2300, label = "Increased distance and  \n decreased elevation change \n (20.2%)", size = 3) +
   geom_text(x = -35000, y = -2000, label = "Decreased distance and  \n elevation change \n (30.5%)", size = 3) +
-  geom_text(x = -35000, y = 1000, label = "Decreased distance and  \n increased elevation change \n (19.6%)", size = 3) +
+  geom_text(x = -35000, y = 1000, label = "Decreased distance and  \n increased elevation change \n (20.4%)", size = 3) +
   theme_bw() + ggtitle("Figure 3b.")
 
 
@@ -213,12 +216,9 @@ balance %>% kable(align = 'c', col.names = colnames(.)) %>%
 
 We modeled the magnitude of shift in the location from one year to the next (ie, the length of the arrows in Figures 3a and 3b).  This metric is indicative of how big of a change an elk made from one year to the next, but not of the direction of that change.
 
+Below are all the models within delta AIC of 2.  Herd diversity and proportion of developed land appear in all models.
 
-``` {r initialCorr, echo = F}
-
-distances %>% dplyr::select("hyp","herdDiversity","propCrop","migDev","winterDev","feedAccess",  
-,"meanDFP","propPrivate","maxSnow" )
-
+``` {r initialCorr, echo = F, include = F}
 
 a <- ggplot(distances) + geom_point(aes(herdDiversity, hyp)) + theme_bw() +
   xlab("Herd diversity") + ylab("Magnitude of shift")
@@ -246,9 +246,354 @@ h <- ggplot(distances) + geom_point(aes(maxSnow, hyp)) + theme_bw() +
   xlab("Maximum snow depth during migratory period") + ylab("Magnitude of shift")
 
 
-ggpubr::ggarrange(a, b, c, d, e, f, g, h, ncol = 3, nrow = 2)
+ggpubr::ggarrange(a, b, c, d, e, f, g, h, ncol = 2, nrow = 4)
 
 ```
+
+``` {r vifTesting, echo = F, eval = F}
+
+#all combinations of variables pass VIF threshold test
+
+vars <- colnames(distances)[10:17]
+
+allCombos <- list()
+
+#finds all combinations of variables
+for (i in 1:8) {
+  l <- combn(1:8, i) %>% t() %>% split(1:nrow(.))
+  allCombos <- append(allCombos, l)
+}
+
+#testing to see if the particular var combination does not violate
+#VIF threshold of 2, (Zuur, Ieno, & Elphick, 2010)
+
+
+#for positive
+vifTest <- function(comboNum) {
+  vifs <- vif(distances %>% dplyr::select(vars[allCombos[[comboNum]]]))
+  if(!is.na(all(vifs$VIF<2)) &  all(vifs$VIF<2) == T){
+    data.table(vars = list(vars[allCombos[[comboNum]]]), passVIF = T) %>% return()
+  } else {
+    data.table(vars = list(vars[allCombos[[comboNum]]]), passVIF = F) %>% return()
+  }
+}
+
+allVIF <- map_dfr(9:length(allCombos), vifTest) %>% 
+  rbind(data.table(vars, passVIF = rep(T, 8)), fill = T) %>%
+  filter(passVIF)
+
+```
+
+
+``` {r mos modeling AIC, echo = F}
+
+vars <- colnames(distances)[10:17]
+
+allCombos <- list()
+
+#finds all combinations of variables
+for (i in 1:8) {
+  l <- combn(1:8, i) %>% t() %>% split(1:nrow(.))
+  allCombos <- append(allCombos, l)
+}
+
+toDF <- function(comboNum) {
+  data.table(vars = list(vars[allCombos[[comboNum]]]))
+}
+
+allVIF <- map_dfr(1:length(allCombos), toDF)
+
+distances$feedAccess <- as.factor(distances$feedAccess)
+
+getModelAIC <- function(row) {
+
+  #no resampling fitting to distanceDiff
+  fitControl <- trainControl(method = "none") 
+  
+  #for models that have 2 or more variables, testing interaction between terms
+  data <- distances %>% 
+    dplyr::select(hyp, unlist(strsplit(allVIF$vars[row][[1]],split='|',fixed=TRUE)))
+  
+  if(ncol(data) > 2) {
+    out <- tryCatch({
+      set.seed(1)
+      model.cv <- train(hyp ~ .,
+                        data = data,
+                        method = "glm",
+                        family = "gaussian",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(vars = allVIF$vars[row], interaction = F, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(vars = allVIF$vars[row], interaction = F,AIC= NA)
+    })
+    
+    #model with all possible 2-way interactions
+    outInteraction <- tryCatch({
+      set.seed(1)
+      model.cv <- train(hyp ~ .^2,
+                        data = data,
+                        method = "glm",
+                        family = "gaussian",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(vars = allVIF$vars[row], interaction = T, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(vars = allVIF$vars[row], interaction = T, AIC= NA)
+    })
+    
+    return(rbind(out, outInteraction))
+  } else {
+    out <- tryCatch({
+      set.seed(1)
+      model.cv <- train(hyp ~ .,
+                        data = data,
+                        method = "glm",
+                        family = "gaussian",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(vars = allVIF$vars[row], interaction = F, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(vars = allVIF$vars[row], interaction = F,AIC= NA)
+    })
+    return(out)
+  }
+}
+plan(multisession)
+allAIC <- future_map_dfr(1:nrow(allVIF), getModelAIC, .options = furrr_options(seed = T)) %>% 
+  mutate(within2 = (AIC - min(AIC) <= 2))
+
+allAIC %>% filter(within2 == T) %>% dplyr::select(-within2) %>%
+  kable(align = 'c', col.names = colnames(.)) %>%
+  kable_styling(bootstrap_options = "striped")
+
+```
+
+Taking these 5 models, we identified the model with the lowest RMSE (via LOOCV).
+
+```{r predictive model, echo = F}
+topMods <- allAIC %>% filter(within2 == T)
+
+fillInAccuracy <- function(row) {
+  r <- topMods[row, ]
+  
+  vars <- topMods$vars[row][[1]]
+  
+  data <- distances %>% dplyr::select(hyp, unlist(strsplit(vars,split='|',fixed=TRUE)))
+  
+  set.seed(1)
+  fitControl <- trainControl(method = "LOOCV") 
+  
+  if(topMods$interaction[row] == T) {
+    model.cv <- train(hyp ~ .^2,
+                      data = data,
+                      method = "glm",
+                      family = "gaussian",
+                      trControl = fitControl, 
+                      preProcess = c('center', 'scale')) 
+  } else {
+    model.cv <- train(hyp ~ .,
+                      data = data,
+                      method = "glm",
+                      family = "gaussian",
+                      trControl = fitControl, 
+                      preProcess = c('center', 'scale')) 
+  }
+  
+  
+  
+  r$RMSE <- model.cv$results$RMSE
+  r$MAE <- model.cv$results$MAE
+  r$Rsquared <- model.cv$results$Rsquared
+  
+  return(r)
+}
+
+top <- map_dfr(1:5, fillInAccuracy)
+top %>% dplyr::select(-within2) %>%
+  kable(align = 'c', col.names = colnames(.)) %>%
+  kable_styling(bootstrap_options = "striped")
+
+
+```
+
+```{r cateorical modeling, echo = F}
+vars <- colnames(distances)[10:17]
+
+allCombos <- list()
+
+#finds all combinations of variables
+for (i in 1:8) {
+  l <- combn(1:8, i) %>% t() %>% split(1:nrow(.))
+  allCombos <- append(allCombos, l)
+}
+
+toDF <- function(comboNum) {
+  data.table(vars = list(vars[allCombos[[comboNum]]]))
+}
+
+allVIF <- map_dfr(1:length(allCombos), toDF)
+
+allVIF <- rbindlist(list(allVIF %>% mutate(target = 1), 
+               allVIF %>% mutate(target = 2),
+               allVIF %>% mutate(target = 3),
+               allVIF %>% mutate(target = 4)))
+
+distances$feedAccess <- as.factor(distances$feedAccess)
+
+distances <- distances %>% mutate(class = ifelse(distanceDiff > 0 & elevDiff >= 0, "1", NA),
+                     class = ifelse(distanceDiff > 0 & elevDiff < 0, "2", class),
+                     class = ifelse(distanceDiff < 0 & elevDiff < 0, "3", class),
+                     class = ifelse(distanceDiff < 0 & elevDiff >= 0, "4", class))
+
+
+
+getCategoricalModelAIC <- function(row) {
+
+  #no resampling fitting to distanceDiff
+  fitControl <- trainControl(method = "none") 
+  
+  #for models that have 2 or more variables, testing interaction between terms
+  #converting class to target
+  
+  data <- distances %>% 
+    dplyr::select(class, unlist(strsplit(allVIF$vars[row][[1]],split='|',fixed=TRUE))) %>%
+    mutate(class = as.factor(ifelse(allVIF$target[row] == class, "1", "0")))
+  
+  if(ncol(data) > 2) {
+    out <- tryCatch({
+      set.seed(1)
+      model.cv <- train(class ~ .,
+                        data = data,
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(target = allVIF$target[row], 
+                 vars = allVIF$vars[row], interaction = F, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(target = allVIF$target[row], vars = allVIF$vars[row], interaction = F,AIC= NA)
+    })
+    
+    #model with all possible 2-way interactions
+    outInteraction <- tryCatch({
+      set.seed(1)
+      model.cv <- train(class ~ .^2,
+                        data = data,
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(target = allVIF$target[row], 
+                 vars = allVIF$vars[row], interaction = T, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(target = allVIF$target[row], 
+                 vars = allVIF$vars[row], interaction = T, AIC= NA)
+    })
+    
+    return(rbind(out, outInteraction))
+  } else {
+    out <- tryCatch({
+      set.seed(1)
+      model.cv <- train(class ~ .,
+                        data = data,
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(target = allVIF$target[row], 
+                 vars = allVIF$vars[row], interaction = F, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(target = allVIF$target[row], 
+                 vars = allVIF$vars[row], interaction = F,AIC= NA)
+    })
+    return(out)
+  }
+}
+
+plan(multisession)
+allAIC <- future_map_dfr(1:nrow(allVIF), getCategoricalModelAIC, .options = furrr_options(seed = T))
+
+class1 <- allAIC %>% filter(target == 1)  %>% mutate(within2 = (AIC - min(AIC) <= 2)) %>%
+  filter(within2)
+class2 <- allAIC %>% filter(target == 2)  %>% mutate(within2 = (AIC - min(AIC) <= 2)) %>%
+  filter(within2)
+class3 <- allAIC %>% filter(target == 3)  %>% mutate(within2 = (AIC - min(AIC) <= 2)) %>%
+  filter(within2)
+class4 <- allAIC %>% filter(target == 4)  %>% mutate(within2 = (AIC - min(AIC) <= 2)) %>%
+  filter(within2)
+
+top <- rbindlist(list(class1, class2, class3, class4))
+
+```
+
+
+```{r top categorical models}
+
+fillInCategoricalAccuracy <- function(row) {
+  
+  r <- top[row, ]
+  
+  vars <- unlist(r$vars)
+  
+  set.seed(1)
+  fitControl <- trainControl(method = "LOOCV") 
+  
+  #for models that have 2 or more variables, testing interaction between terms
+  #converting class to target
+  
+  data <- distances %>% 
+    dplyr::select(class, vars) %>%
+    mutate(class = as.factor(ifelse(r$target[1] == class, "1", "0")))
+  
+  if(r$interaction == F) {
+      set.seed(1)
+      model.cv <- train(class ~ .,
+                        data = data,
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+    } else {
+      set.seed(1)
+      model.cv <- train(class ~ .^2,
+                        data = data,
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+    }
+ 
+  r$accuracy <- model.cv$results$Accuracy[1]
+  
+  return(r)
+}
+
+plan(multisession)
+catResults <- future_map_dfr(1:nrow(top), fillInCategoricalAccuracy, .options = furrr_options(seed = T))
+
+```
+
+
 
 
 ## Appendix
