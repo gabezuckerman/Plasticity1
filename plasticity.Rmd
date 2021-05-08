@@ -110,6 +110,11 @@ ggplot(distances) + geom_segment(aes(x = 0, y = 0, xend = distanceDiff, yend= el
   geom_text(x = -35000, y = 1000, label = "Decreased distance and  \n increased elevation change \n (20.4%)", size = 3) +
   theme_bw() + ggtitle("Figure 3b.")
 
+distances %>% mutate(relativeDist = sp2dist/sp1dist, relativeElev = abs(sp2elev/sp1elev)) %>%
+  filter(relativeDist < 10) %>%
+  ggplot() + geom_point(aes(relativeDist, relativeElev)) +
+  scale_x_continuous(breaks = 1:10)
+
 
 ```
 
@@ -218,7 +223,7 @@ We modeled the magnitude of shift in the location from one year to the next (ie,
 
 Below are all the models within delta AIC of 2.  Herd diversity and proportion of developed land appear in all models.
 
-``` {r initialCorr, echo = F, include = F}
+``` {r initialCorr, echo = FALSE, include = FALSE, eval = FALSE}
 
 a <- ggplot(distances) + geom_point(aes(herdDiversity, hyp)) + theme_bw() +
   xlab("Herd diversity") + ylab("Magnitude of shift")
@@ -250,7 +255,7 @@ ggpubr::ggarrange(a, b, c, d, e, f, g, h, ncol = 2, nrow = 4)
 
 ```
 
-``` {r vifTesting, echo = F, eval = F}
+``` {r vifTesting, echo = FALSE, eval = FALSE}
 
 #all combinations of variables pass VIF threshold test
 
@@ -285,7 +290,7 @@ allVIF <- map_dfr(9:length(allCombos), vifTest) %>%
 ```
 
 
-``` {r mos modeling AIC, echo = F}
+``` {r mos modeling AIC, echo = FALSE, warning = FALSE}
 
 vars <- colnames(distances)[10:17]
 
@@ -371,16 +376,16 @@ getModelAIC <- function(row) {
 plan(multisession)
 allAIC <- future_map_dfr(1:nrow(allVIF), getModelAIC, .options = furrr_options(seed = T)) %>% 
   mutate(within2 = (AIC - min(AIC) <= 2))
-
-allAIC %>% filter(within2 == T) %>% dplyr::select(-within2) %>%
-  kable(align = 'c', col.names = colnames(.)) %>%
-  kable_styling(bootstrap_options = "striped")
+# 
+# allAIC %>% filter(within2 == T) %>% dplyr::select(-within2) %>%
+#   kable(align = 'c', col.names = colnames(.)) %>%
+#   kable_styling(bootstrap_options = "striped")
 
 ```
 
 Taking these 5 models, we identified the model with the lowest RMSE (via LOOCV).
 
-```{r predictive model, echo = F}
+```{r predictive model, echo = FALSE, warning = FALSE}
 topMods <- allAIC %>% filter(within2 == T)
 
 fillInAccuracy <- function(row) {
@@ -426,7 +431,11 @@ top %>% dplyr::select(-within2) %>%
 
 ```
 
-```{r cateorical modeling, echo = F}
+## What contributes to the directionality of plasticity?
+
+We modeled the directionality of plasticity via the quadrant (in Figure 3b) it fell in.  For example, class 1 would indicate both an increase geographical distance and elevation change.  The top models for each class can be found below.
+
+```{r cateorical modeling, echo = FALSE, warning = FALSE}
 vars <- colnames(distances)[10:17]
 
 allCombos <- list()
@@ -546,7 +555,7 @@ top <- rbindlist(list(class1, class2, class3, class4))
 ```
 
 
-```{r top categorical models}
+```{r top categorical models, echo = FALSE, warning = FALSE}
 
 fillInCategoricalAccuracy <- function(row) {
   
@@ -590,6 +599,10 @@ fillInCategoricalAccuracy <- function(row) {
 
 plan(multisession)
 catResults <- future_map_dfr(1:nrow(top), fillInCategoricalAccuracy, .options = furrr_options(seed = T))
+
+catResults %>% arrange(target, desc(accuracy)) %>%
+  kable(align = 'c', col.names = colnames(.)) %>%
+  kable_styling(bootstrap_options = "striped") %>% scroll_box(height = "400px", width = "800px") 
 
 ```
 
