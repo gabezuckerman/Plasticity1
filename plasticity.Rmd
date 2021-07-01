@@ -43,7 +43,7 @@ getIndYears <- function(row) {
   elevs <- c(test$sp1elev[1], test$sp2elev[1])
   elk <- c(test$elk[1], test$elk[1])
   
-  return(data.table(elk, years, dists, elevs))
+  return(data.table(elk, years, dists, elevs, herd = test$herd[1]))
 }
 
 allIndYears <- map_dfr(1:nrow(distances), getIndYears) %>% distinct(elk, years, .keep_all = T) %>%
@@ -51,6 +51,30 @@ allIndYears <- map_dfr(1:nrow(distances), getIndYears) %>% distinct(elk, years, 
 
 ggplot(allIndYears) + geom_point(aes(dists, absElev), alpha = .5) + ylab("Abosulte elevation change") +
   xlab("Geographic distance") + theme_bw() + ggtitle("Figure 1.")
+
+```
+```{r mpd, echo=F}
+
+#adding year
+multibursts <- fread("../Switching3/movementData/multiburstsNC.csv")
+
+allIndYears <- allIndYears %>% merge(
+  multibursts %>% distinct(elk = gps_sensors_animals_id, years = year, startDateYear) %>%
+    mutate(dateYear = startDateYear + 1, elk = as.character(elk), years = as.character(years)) %>% dplyr::select(-startDateYear)
+)
+
+
+getYearlyHerdMPD <- function(h, y) {
+  paste(h, y)
+  allIndYears %>% filter(herd == h, dateYear == y) %>% dplyr::select(dists, elevs) %>% dist() %>% 
+    as.numeric() %>% mean()
+}
+
+herdYears <- allIndYears %>% group_by(herd, dateYear) %>% summarise(n = n_distinct(elk)) %>% ungroup()
+
+#how to deal with herd years that only have a single ind?
+herdYears$mpd <- map2_dbl(herdYears$herd, herdYears$dateYear, getYearlyHerdMPD) 
+
 
 ```
 
@@ -144,7 +168,7 @@ getY2Y <- function(id){
 y2y <- map_dfr(unique(allIndYears$elk), getY2Y)
 
 #merging to find yearly switch rate
-multibursts <- fread("../Switching3/movementData/multiburstsNC.csv") %>%
+multibursts <- multibursts %>%
   distinct(id = gps_sensors_animals_id, year1 = year, startDateYear)
 
 y2y <- y2y %>% mutate(year1 = as.numeric(year1), id = as.numeric(id)) %>% merge(multibursts %>% filter)

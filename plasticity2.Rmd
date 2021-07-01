@@ -1,0 +1,610 @@
+---
+title: "Plasticity/Switching 2"
+author: "Gabe Zuckerman"
+date: "6/23/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(data.table)
+library(tidyverse)
+library(cluster) 
+library(factoextra)
+library(ClusterR)
+library(fpc)
+library(ggalluvial)
+library(knitr)
+library(kableExtra)
+library(usdm)
+library(furrr)
+library(caret)
+library(lubridate)
+library(Hmisc)
+
+
+
+setwd("C:/Users/MiddletonLab/Desktop/Gabe/Box Sync/Elk/Plasticity1/")
+
+
+distances <- fread("movementData/distanceChanges.csv")
+
+timing <- fread("../Switching3/timingData/finalTiming.csv", na.strings = "")
+
+```
+
+Single year movements
+
+```{r fixing residents, echo=F}
+#change figures to only include elk in final dataset
+
+distances$elk <- map_chr(distances$id, ~strsplit(.x, "_")[[1]][1])
+
+getIndYears <- function(row) {
+  test <- distances[row,]
+  
+  #extracting info from each row
+  years <- strsplit(strsplit(test$id[1], "_")[[1]], "-")[[2]]
+  dists <- c(test$sp1dist[1], test$sp2dist[1])
+  elevs <- c(test$sp1elev[1], test$sp2elev[1])
+  elk <- c(test$elk[1], test$elk[1])
+  
+  return(data.table(elk, years, dists, elevs, herd = test$herd[1]))
+}
+
+allIndYears <- map_dfr(1:nrow(distances), getIndYears) %>% distinct(elk, years, .keep_all = T) %>%
+  mutate(absElev = abs(elevs)) %>% mutate(elkYear = paste(elk, years, sep = "_"))
+
+#if an elk had no timing in a year, then changing is distance to 0
+residents <- allIndYears %>% filter(elkYear %in%  filter(timing, reclass == "resident")$elkYear) %>%
+  mutate(dists = 0, elevs = 0, absElev = 0, class = "R")
+nonRes <- allIndYears %>% filter(elkYear %nin% residents$elkYear) %>% mutate(class = NA)
+
+allIndYears <- rbind(residents, nonRes)
+
+#residents are now at (0,0)
+ggplot(allIndYears) + geom_point(aes(dists, absElev), alpha = .5) + ylab("Abosulte elevation change") +
+  xlab("Geographic distance") + theme_bw() + ggtitle("Figure 1.")
+
+```
+
+
+```{r classify, echo=FALSE}
+#change figures to only include elk in final dataset
+
+
+forCluster <- allIndYears %>% filter(is.na(class)) %>%
+  dplyr::select(dists, absElev) %>% mutate(dists = scale(dists, center = T),
+                                                  absElev = scale(absElev, center = T))
+
+#kmeans with 3
+set.seed(1)
+
+k <- kmeans(forCluster, centers = 3, nstart = 25)
+nonRes <- allIndYears %>% filter(is.na(class)) %>% mutate(class = k$cluster) %>%
+  merge(data.table(class = 1:3, strategy = c("LDM", "EM", "SDM"))) %>% dplyr::select(-class) %>%
+  rename(class = strategy)
+
+
+allIndYears <- rbind(allIndYears %>% filter(class == "R"), nonRes)
+
+ggplot(allIndYears) + geom_point(aes(dists, absElev, color = class), alpha = .5) +
+  ylab("Abosulte elevation change") +   xlab("Geographic distance") + 
+  geom_text(x=22500, y=1250, label="Elev. M \n (n = 185 elk-years, 20.8%)") +
+  geom_text(x=22500, y=350, label="SDM \n(n = 470 elk-years, 52.8%)") +
+  geom_text(x = 75000, y = 1000, label = "LDM \n(n = 192 elk-years, 21.6%)") + 
+  geom_text(x = 17500, y = 0, label = "R (n = 43 elk-years, 4.8%)") +
+  theme_bw() + theme(legend.position = "none") + ggtitle("Figure 2.")
+  
+
+
+```
+
+```{r first day DNHM, echo = F}
+library(plotly)
+
+set.seed(1)
+resX <- rnorm(200, mean = 3000, sd = 5000)
+resY <- rnorm(200, mean = 0, sd = 100)
+
+resF1 <- data.table(dists = resX, absElev = resY, class  = "R", f = 1)
+
+sdmX <- runif(100, min = 100, max = 100)
+sdmY <- runif(100, min = 0, max = 0)
+
+sdmF1 <- data.table(dists = sdmX, absElev = sdmY, class = "SDM", f = 1)
+
+emX <- runif(100, min = 100000, max = 100000)
+emY <- runif(100, min = 1525, max = 1575)
+
+emF1 <- data.table(dists = emX, absElev = emY, class = "EM", f = 1)
+
+ldmX <- rnorm(490, mean = 100000, sd = 5000)
+ldmY <- rnorm(490, mean = 1500, sd = 200)
+
+ldmF1 <- data.table(dists = ldmX, absElev = ldmY, class  = "LDM", f = 1)
+
+
+f1 <- rbindlist(list(resF1, sdmF1, emF1, ldmF1)) %>% mutate(point = 1:890)
+
+ani1 <- f1 %>% rbind(allIndYears %>% dplyr::select(dists, absElev, class) %>%
+                       mutate(f = 2, point = 1:890))
+
+ani1$class <- factor(ani1$class, levels = c("SDM", "EM", "R", "LDM"))
+
+a <-  ggplot(ani1) + geom_point(aes(dists, absElev, color = class, frame = f)) +
+  theme_bw() + theme(legend.position = "none") +
+  ylab("Abosulte elevation change (m)") +   xlab("Geographic distance (m)") +
+  scale_color_brewer(palette = "Dark2")
+
+ggplotly(a) %>%  animation_opts(frame = 1500, transition = 1500, redraw = FALSE) %>%
+  add_text(x = c(c(3000, 100000),c(0,110000, 30000, 35000)),
+           y = c(c(0, 1500),c(-200, 500, 1800, -200)), 
+           yshift = 100,
+           text = c(c("<b>Residents","<b>Migrants"), 
+                    c("<b>Residents", "<b>Long \n distance \n migrants", 
+                      "<b>Elevational migrants", "<b>Short distance \n migrants")),
+           frame = c(c(1, 1), c(2, 2, 2, 2)),
+           showlegend = FALSE,
+           textfont = list(family = "century gothic", size = 20,
+                           color = c("black", "black", "#7570b3", 
+                                     "#e7298a", "#d95f02", "#1b9e77")))
+
+
+```
+
+
+Multiyear movements
+```{r repair distance, echo=FALSE}
+getY2Y <- function(id){
+  t <- allIndYears %>% arrange(years) %>% filter(elk == id) %>%
+    dplyr::select(elk, years, class, dists, elevs)
+  year1 <- c()
+  year2 <- c()
+  strat1 <- c()
+  strat2 <- c()
+  sp1dist <- c()
+  sp2dist <- c()
+  sp1elev <- c()
+  sp2elev <- c()
+  
+  for (i in 1:(nrow(t)-1)) {
+    year1 <- c(year1, t$years[i])
+    year2 <- c(year2, t$years[i+1])
+    strat1 <- c(strat1, t$class[i])
+    strat2 <- c(strat2, t$class[i+1])
+    sp1dist <- c(sp1dist, t$dists[i])
+    sp2dist <- c(sp2dist, t$dists[i+1])
+    sp1elev <- c(sp1elev, t$elevs[i])
+    sp2elev <- c(sp2elev, t$elevs[i+1])
+    
+
+  }
+  return(data.table(id, year1, year2, strat1, strat2, sp1dist, sp2dist, sp1elev, sp2elev))
+}
+
+y2y <- map_dfr(unique(allIndYears$elk), getY2Y)
+
+y2y$switch <- y2y$strat1 != y2y$strat2
+
+y2y$switchID <- paste0(y2y$id, "_", y2y$year1, "-", y2y$year2)
+
+y2y <- y2y %>% mutate(elevDiff = sp2elev - sp1elev, distanceDiff = sp2dist - sp1dist,
+               vecDiff =sqrt(elevDiff^2 + distanceDiff^2))
+
+#adding herd and year
+gps <- fread("../Switching3/movementData/multiburstsNC.csv") %>% distinct(elkYear, startDateYear, herd)
+
+y2y$elkYear <- paste(y2y$id, y2y$year1, sep = "_")
+
+y2y <- y2y %>% merge(gps) %>% mutate(years = paste0(startDateYear+1, "-", startDateYear + 2)) %>%
+  dplyr::select(elk = id, switchID, herd, years, year1, year2, strat1, strat2, switch, sp1dist, sp2dist,
+                sp1elev, sp2elev, distanceDiff, elevDiff, vecDiff)
+
+fwrite(y2y, "movementData/updatedSwitchTable.csv")
+
+
+```
+
+
+
+
+
+```{r covariates, echo = F}
+#removed sand creek
+
+y2y <- y2y %>% filter(herd != "Sand Creek")
+
+#winter range 2 crop prop
+crop <- fread("../Switching3/covariates/crop/cropProp.csv") %>% filter(p == "winter2") %>%
+  rename(switchID = id) %>% dplyr::select(-p, -year)
+
+y2y <- y2y %>% merge(crop)
+
+#winter range 2 and migratory period dev prop
+dev <- fread("../Switching3/covariates/development/devProp.csv")
+
+winter2dev <- dev %>% filter(p == "winter2") %>% dplyr::select(-year, -p) %>%
+  rename(switchID = id)
+colnames(winter2dev)[2] <- paste0("winter2", colnames(winter2dev)[2])
+
+springMigDev <- dev %>% filter(p == "springMig") %>% dplyr::select(-year, -p) %>%
+  rename(switchID = id)
+colnames(springMigDev)[2] <- paste0("springMig", colnames(springMigDev)[2])
+
+y2y <- y2y %>% merge(winter2dev) %>% merge(springMigDev)
+
+#feed ground
+feed <- fread("../Switching3/covariates/feed/feedAccess.csv")
+
+winter2feed <- feed %>% filter(p == "winter2") %>% dplyr::select(-numFeedgrounds, -p) %>%
+  rename(switchID = id)
+colnames(winter2feed)[2] <- paste0("winter2", colnames(winter2feed)[2])
+
+y2y <- y2y %>% merge(winter2feed)
+
+#spring green up
+greenUp <- fread("../Switching3/covariates/greenUp/irg.csv")
+
+springMigGreenUp <- greenUp %>% filter(period == "springMig") %>%
+  dplyr::select(switchID, meanDFP, -period)
+
+y2y <- y2y %>% merge(springMigGreenUp)
+
+#max snow depth
+
+snow <- fread("../Switching3/covariates/snow/snodasExtraction.csv") %>% group_by(switchID, period) %>%
+  dplyr::summarise(meanSnow = mean(Snow_Depth_mean, na.rm = T),
+                   varSnow = var(Snow_Depth_mean, na.rm = T),
+                   maxSnow = max(Snow_Depth_mean, na.rm = T)) %>%
+  filter(period == "winter2") %>% dplyr::select(switchID, maxSnow)
+
+y2y <- y2y %>% merge(snow)
+
+#add herd diversity
+hd <- allIndYears %>% filter(elk %in% y2y$elk) %>% merge(
+  y2y %>% dplyr::select(elk, herd)
+) %>% mutate(vecDist = sqrt(dists^2 + elevs^2)) %>% group_by(herd) %>%summarise(diversity = sd(vecDist))
+
+y2y <- y2y %>% merge(hd, by = "herd") %>% select(switchID, elk, herd, everything())
+
+```
+
+``` {r alluvial, echo = F}
+forAlluv <- y2y %>% group_by(strat1, strat2) %>% dplyr::summarise(n = n())
+
+#all = 105/478 = 22%
+#EM: 41/108=38%
+#R: 6/23=26%
+#LDM: 11/86=13%
+#SDM: 41/256=16%
+
+ggplot(forAlluv %>% filter(strat1 != strat2),
+       aes(y = n, axis1 = strat1, axis2 = strat2)) +
+  geom_alluvium(aes(fill = strat1), width = 1/12) +
+  geom_stratum(width = 1/12, fill = "black", color = "grey") +
+  geom_label(stat = "stratum", 
+             aes(label = after_stat(stratum))) +
+  theme_bw() + ylab("") + xlab("") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.ticks = element_blank(), axis.text = element_blank(),
+        panel.border = element_blank()) + 
+  labs(fill = "Strategy") + ggtitle("Figure 4b.")
+
+```
+
+
+``` {r vifTesting, echo = FALSE, eval = FALSE}
+#all two-way combinations of variables pass VIF threshold test
+
+vars <- colnames(y2y)[17:22]
+
+#all two way combinations of variables
+combos <- combn(vars, 2) %>% t() %>% as.data.table()
+
+
+#testing to see if the particular var combination does not violate
+#VIF threshold of 2, (Zuur, Ieno, & Elphick, 2010)
+
+
+#for positive
+vifTest <- function(comboNum) {
+  
+  vifs <- vif(y2y %>% dplyr::select(combos[comboNum,] %>% as.character()))
+  
+  if(!is.na(all(vifs$VIF<2)) &  all(vifs$VIF<2) == T){
+    data.table(vars = list(combos[comboNum,] %>% as.character()), passVIF = T) %>% return()
+  } else {
+    data.table(vars = list(combos[comboNum,] %>% as.character()), passVIF = F) %>% return()
+  }
+}
+
+
+```
+
+``` {r modeling AIC, echo = FALSE, eval= F, warning = FALSE}
+
+vars <- colnames(y2y)[17:22]
+
+#all two way combinations of variables, plus each variable on its own
+combos <- rbind(combn(vars, 2) %>% t() %>% as.data.table(), 
+                data.table(colnames(y2y)[17:22], rep(NA, 6)))
+
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$strat1 <- as.factor(y2y$strat1)
+
+getModelAIC <- function(row) {
+  
+  #no resampling fitting to distanceDiff
+  fitControl <- trainControl(sampling = "down") 
+  
+  modelVars <- combos[row,] %>% as.character() %>% na.omit()
+  
+  #for models that have 2 or more variables, testing interaction between terms
+  data <- y2y %>% 
+    dplyr::select(switch, modelVars, strat1) %>% mutate(switch = ifelse(switch == T, 1, 0)) %>%
+    mutate(switch = as.character(switch))
+  form = paste0("switch ~ ",paste(paste(modelVars, "strat1", sep = ":"), collapse = " + "))
+  
+  noquote(paste0("switch ~ ", paste(paste(modelVars, "strat1", sep = ":"), collapse = " + ")))
+  
+  if(ncol(data) > 2) {
+    out <- tryCatch({
+      set.seed(1)
+      model.cv <- train(x = data %>% dplyr::select(-switch), y = data$switch,
+                        #data = data,
+                        form =noquote( paste(paste(modelVars, "strat1", sep = ":"), collapse = " + ")),
+
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(vars = list(modelVars), interaction = F, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(vars = list(modelVars), interaction = F,AIC= NA)
+    })
+    
+    #model with all possible 2-way interactions
+    outInteraction <- tryCatch({
+      set.seed(1)
+      model.cv <- train(switch ~ .^2,
+                        data = data,
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(vars = list(modelVars), interaction = T, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(vars = list(modelVars), interaction = T, AIC= NA)
+    })
+    
+    return(rbind(out, outInteraction))
+  } else {
+    out <- tryCatch({
+      set.seed(1)
+      model.cv <- train(switch ~ .,
+                        data = data,
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(vars = list(modelVars), interaction = F, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(vars = list(modelVars), interaction = F,AIC= NA)
+    })
+    return(out)
+  }
+}
+
+mods <- map_dfr(1:nrow(combos), getModelAIC)
+```
+
+```{r model AIC 2}
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$strat1 <- as.factor(y2y$strat1)
+y2y <- y2y %>% mutate(switch = ifelse(switch == T, 1, 0)) %>%
+    mutate(switch = as.character(switch)) 
+
+fitControl <- trainControl(sampling = "down", summaryFunction = prSummary, method = "LOOCV") 
+
+#one variable models with strategy interaction
+model1 <- train(switch ~ propCrop:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F") 
+
+model2 <- train(switch ~ winter2propDev:strat1, data = y2y, method = "glmnet", family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+#warning
+model3 <- train(switch ~ springMigpropDev:strat1,data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model4 <- train(switch ~ winter2feedAccess:strat1,data = y2y,method = "glmnet", metric = "F",
+#                         family = "binomial",trControl = fitControl,preProcess = c('center', 'scale'))
+
+model4 <- train(switch ~ meanDFP:strat1,data = y2y, method = "glmnet",family = "binomial",
+                trControl = fitControl,preProcess = c('center', 'scale'), metric = "F")
+
+model5 <- train(switch ~ maxSnow:strat1,data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl,preProcess = c('center', 'scale'), metric = "F")
+
+model6 <- train(switch ~ diversity:strat1,data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
+#                         model5$finalModel, model6$finalModel, model7$finalModel))
+
+#all two variable combinations interacted with strategy
+#warning
+model7 <- train(switch ~ propCrop:winter2propDev:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model8 <- train(switch ~ propCrop:springMigpropDev:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model10 <- train(switch ~ propCrop:winter2feedAccess:strat1, data = y2y,method = "glmnet",family = "binomial",
+#                         trControl = fitControl, preProcess = c('center', 'scale'))
+
+model9 <- train(switch ~ propCrop:meanDFP:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+model10 <- train(switch ~ propCrop:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+#warning
+model11 <- train(switch ~ propCrop:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model12 <- train(switch ~ winter2propDev:springMigpropDev:strat1, data = y2y,method = "glmnet",
+                 family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model15 <- train(switch ~ winter2propDev:winter2feedAccess:strat1, data = y2y,method = "glmnet",
+#                  family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+model13 <- train(switch ~ winter2propDev:meanDFP:strat1, data = y2y,method = "glmnet",
+                 family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+model14 <- train(switch ~ winter2propDev:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model15 <- train(switch ~ winter2propDev:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model19 <- train(switch ~ springMigpropDev:winter2feedAccess:strat1, data = y2y,method = "glmnet",
+#                  family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+model16 <- train(switch ~ springMigpropDev:meanDFP:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model17 <- train(switch ~ springMigpropDev:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model18 <- train(switch ~ springMigpropDev:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model23 <- train(switch ~ winter2feedAccess:meanDFP:strat1, data = y2y,method = "glmnet",family = "binomial",
+#                         trControl = fitControl, preProcess = c('center', 'scale'))
+# 
+# model24 <- train(switch ~ winter2feedAccess:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+#                         trControl = fitControl, preProcess = c('center', 'scale'))
+# 
+# model25 <- train(switch ~ winter2feedAccess:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+#                         trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+model19 <- train(switch ~ meanDFP:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+model20 <- train(switch ~ meanDFP:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+model21 <- train(switch ~ maxSnow:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+
+model1$results %>% mutate(model = 21) %>% filter(`F` == max(`F`))
+
+AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
+                        model5$finalModel, model6$finalModel, model7$finalModel, model8$finalModel, 
+                        model9$finalModel, model10$finalModel, model11$finalModel, model12$finalModel, 
+                        model13$finalModel, model14$finalModel, model15$finalModel, model16$finalModel,
+                        model17$finalModel, model18$finalModel, model19$finalModel, model20$finalModel,
+                        model21$finalModel))
+```
+
+
+```{r predictive model, echo = FALSE, warning = FALSE}
+topMod <- mods %>% filter(AIC <= min(AIC) + 2)
+
+vars <- topMod$vars[1][[1]]
+
+data <- y2y %>% 
+    dplyr::select(switch, vars, strat1) %>% mutate(switch = ifelse(switch == T, 1, 0))  %>%
+    mutate(switch = as.factor(switch))
+
+set.seed(1)
+fitControl <- trainControl(method = "LOOCV",
+                           sampling = "down", summaryFunction = prSummary) 
+
+
+model.cv <- train(switch ~ .^2,
+                    data = data,
+                    method = "glm",
+                    family = "binomial",
+                    trControl = fitControl, 
+                    metric = "F",
+                    preProcess = c('center', 'scale')) 
+
+summary(model.cv$finalModel)
+
+ggplot(y2y) + geom_jitter(aes(x = winter2propDev, y = switch, color = winter2feedAccess))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+Because only want to focus on the big changes, and 75% of data has a magnitude of shift less than 9km, models would not fit large shifts well.
+
+```{r y2y plastic, echo=FALSE, fig.show="hold", out.width="50%"}
+ggplot(y2y) + geom_point(aes(sp1dist, abs(sp1elev)), color = "red", alpha = .5) +
+  geom_point(aes(sp2dist, abs(sp2elev)), color = "blue", alpha = .5) +
+  geom_segment(aes(x = sp1dist, y = abs(sp1elev), 
+                   xend = sp2dist, yend = abs(sp2elev)),alpha = .2, 
+               arrow = arrow(length=unit(0.20,"cm"), type = "closed")) +
+  ylab("Absolute elevation change") + xlab("Geographic distance") + theme_bw() + theme(legend.position = "none") + ggtitle("Figure 3a.")
+
+#change to red center and blue arrow, with magnitude opacity
+ggplot(y2y) + geom_segment(aes(x = 0, y = 0, xend = distanceDiff, yend= elevDiff), alpha = .2,
+                                 arrow = arrow(length = unit(0.05, "inches"))) +
+  geom_point(aes(x = distanceDiff, y = elevDiff), color = "blue", alpha = .2) +
+    geom_point(aes(x = 0, y = 0), color = "red", size = 4, alpha = .25) +
+  xlab("Difference in distance from year 1 to year 2") + 
+  ylab("Difference in elevation change from year 1 to year 2") +
+  geom_text(x = 50000, y = 2000, label = "Increased distance and  \n elevation change \n (31.6%)", size = 3) +
+  geom_text(x = 50000, y = -2300, label = "Increased distance and  \n decreased elevation change \n (18.9%)", size = 3) +
+  geom_text(x = -35000, y = -2000, label = "Decreased distance and  \n elevation change \n (30.7%)", size = 3) +
+  geom_text(x = -35000, y = 1000, label = "Decreased distance and  \n increased elevation change \n (18.9%)", size = 3) +
+  theme_bw() + ggtitle("Figure 3b.")
+
+
+#either focus on changes that double/halve, or
+
+
+
+relDistEls <- y2y %>% mutate(relativeDist = sp2dist/sp1dist, relativeElev = abs(sp2elev/sp1elev)) %>%
+  mutate(big = ifelse(relativeDist < .5 | relativeDist >= 2 | relativeElev < .5 | relativeElev >= 2,
+                      T, F),
+         big = ifelse(is.nan(relativeDist), F, big))
+
+
+relDistEls %>%
+  #filter(relativeDist < 10) %>%
+  ggplot() + geom_point(aes(relativeDist, relativeElev, color = big)) +
+  scale_x_continuous(breaks = 1:10)
+
+relVecs <- y2y %>% mutate(vec1 = sqrt(sp1elev^2 + sp1dist^2), vec2 = sqrt(sp2elev^2 + sp2dist^2),
+               relVec = vec2/vec1, big = ifelse(relVec >= 2 | relVec < .5, T, F))
+
+
+
+relVecs %>%
+  ggplot() + geom_point(aes(vec1, vec2, color = big))
+
+
+```
