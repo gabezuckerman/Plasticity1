@@ -1,0 +1,628 @@
+---
+title: "unused modeling"
+author: "Gabe Zuckerman"
+date: "7/9/2021"
+output: html_document
+---
+
+``` {r modeling AIC, echo = FALSE, eval= F, warning = FALSE}
+
+vars <- colnames(y2y)[17:22]
+
+#all two way combinations of variables, plus each variable on its own
+combos <- rbind(combn(vars, 2) %>% t() %>% as.data.table(), 
+                data.table(colnames(y2y)[17:22], rep(NA, 6)))
+
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$strat1 <- as.factor(y2y$strat1)
+
+getModelAIC <- function(row) {
+  
+  #no resampling fitting to distanceDiff
+  fitControl <- trainControl(sampling = "down") 
+  
+  modelVars <- combos[row,] %>% as.character() %>% na.omit()
+  
+  #for models that have 2 or more variables, testing interaction between terms
+  data <- y2y %>% 
+    dplyr::select(switch, modelVars, strat1) %>% mutate(switch = ifelse(switch == T, 1, 0)) %>%
+    mutate(switch = as.character(switch))
+  form = paste0("switch ~ ",paste(paste(modelVars, "strat1", sep = ":"), collapse = " + "))
+  
+  noquote(paste0("switch ~ ", paste(paste(modelVars, "strat1", sep = ":"), collapse = " + ")))
+  
+  if(ncol(data) > 2) {
+    out <- tryCatch({
+      set.seed(1)
+      model.cv <- train(x = data %>% dplyr::select(-switch), y = data$switch,
+                        #data = data,
+                        form =noquote( paste(paste(modelVars, "strat1", sep = ":"), collapse = " + ")),
+
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(vars = list(modelVars), interaction = F, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(vars = list(modelVars), interaction = F,AIC= NA)
+    })
+    
+    #model with all possible 2-way interactions
+    outInteraction <- tryCatch({
+      set.seed(1)
+      model.cv <- train(switch ~ .^2,
+                        data = data,
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(vars = list(modelVars), interaction = T, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(vars = list(modelVars), interaction = T, AIC= NA)
+    })
+    
+    return(rbind(out, outInteraction))
+  } else {
+    out <- tryCatch({
+      set.seed(1)
+      model.cv <- train(switch ~ .,
+                        data = data,
+                        method = "glm",
+                        family = "binomial",
+                        trControl = fitControl, 
+                        preProcess = c('center', 'scale'))  
+      
+      
+      data.table(vars = list(modelVars), interaction = F, AIC= AIC(model.cv$finalModel))
+    },
+    error=function(cond) {
+      data.table(vars = list(modelVars), interaction = F,AIC= NA)
+    })
+    return(out)
+  }
+}
+
+mods <- map_dfr(1:nrow(combos), getModelAIC)
+```
+
+
+```{r model glm vec diff AIC 2, eval = F}
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$vec1 <- sqrt(y2y$sp1dist^2 + y2y$sp1elev^2)
+y2y$vec2 <- sqrt(y2y$sp2dist^2 + y2y$sp2elev^2)
+y2y$vecDiff <- y2y$vec2 - y2y$vec1
+
+
+fitControl <- trainControl() 
+
+# fitControl2 <- trainControl(summaryFunction = prSummary, method = "LOOCV") 
+
+
+
+null <- glm(vecDiff ~ 1, data = y2y, family = "gaussian")
+
+#one variable models with strategy interaction
+model1v <- train(vecDiff ~ propCrop:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale')) 
+
+model2v <- train(vecDiff ~ winter2propDev:vec1, data = y2y, method = "glm", family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model3v <- train(vecDiff ~ springMigpropDev:vec1,data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#best
+model4v <- train(vecDiff ~ winter2feedAccess:vec1,data = y2y,method = "glm",
+                        family = "gaussian",trControl = fitControl,preProcess = c('center', 'scale'))
+
+model5v <- train(vecDiff ~ meanDFP:vec1,data = y2y, method = "glm",family = "gaussian",
+                trControl = fitControl,preProcess = c('center', 'scale'))
+
+model6v <- train(vecDiff ~ maxSnow:vec1,data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl,preProcess = c('center', 'scale'))
+
+model7v <- train(vecDiff ~ diversity:vec1,data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+#all two variable combinations interacted with strategy
+
+model8v <- train(vecDiff ~ propCrop:winter2propDev:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model9v <- train(vecDiff ~ propCrop:springMigpropDev:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model10v <- train(vecDiff ~ propCrop:winter2feedAccess:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+model11v <- train(vecDiff ~ propCrop:meanDFP:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model12v <- train(vecDiff ~ propCrop:maxSnow:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model13v <- train(vecDiff ~ propCrop:diversity:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model14v <- train(vecDiff ~ winter2propDev:springMigpropDev:vec1, data = y2y,method = "glm",
+                 family = "gaussian", trControl = fitControl, preProcess = c('center', 'scale'))
+
+model15v <- train(vecDiff ~ winter2propDev:winter2feedAccess:vec1, data = y2y,method = "glm",
+                 family = "gaussian",trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+model16v <- train(vecDiff ~ winter2propDev:meanDFP:vec1, data = y2y,method = "glm",
+                 family = "gaussian", trControl = fitControl, preProcess = c('center', 'scale'))
+
+model17v <- train(vecDiff ~ winter2propDev:maxSnow:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model18v <- train(vecDiff ~ winter2propDev:diversity:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model19v <- train(vecDiff ~ springMigpropDev:winter2feedAccess:vec1, data = y2y,method = "glm",
+                 family = "gaussian",trControl = fitControl, preProcess = c('center', 'scale'))
+
+model20v <- train(vecDiff ~ springMigpropDev:meanDFP:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model21v <- train(vecDiff ~ springMigpropDev:maxSnow:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model22v <- train(vecDiff ~ springMigpropDev:diversity:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model23v <- train(vecDiff ~ winter2feedAccess:meanDFP:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model24v <- train(vecDiff ~ winter2feedAccess:maxSnow:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model25v <- train(vecDiff ~ winter2feedAccess:diversity:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+model26v <- train(vecDiff ~ meanDFP:maxSnow:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model27v <- train(vecDiff ~ meanDFP:diversity:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model28v <- train(vecDiff ~ maxSnow:diversity:vec1, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+AICcmodavg::aictab(list(model1v$finalModel, model2v$finalModel, model3v$finalModel, model4v$finalModel,
+                        model5v$finalModel, model6v$finalModel, model7v$finalModel, model8v$finalModel, 
+                        model9v$finalModel, model10v$finalModel, model11v$finalModel, model12v$finalModel, 
+                        model13v$finalModel, model14v$finalModel, model15v$finalModel, model16v$finalModel,
+                        model17v$finalModel, model18v$finalModel, model19v$finalModel, model20v$finalModel,
+                        model21v$finalModel, model22v$finalModel, model23v$finalModel, model24v$finalModel,
+                        model25v$finalModel, model26v$finalModel, model27v$finalModel, model28v$finalModel))
+#not competitive
+AIC(null)
+
+```
+
+
+
+```{r model glm dist diff AIC 2, eval = F}
+fitControl <- trainControl() 
+
+#one variable models with strategy interaction
+model1d <- train(distanceDiff ~ propCrop:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale')) 
+
+model2d <- train(distanceDiff ~ winter2propDev:sp1dist, data = y2y, method = "glm", family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model3d <- train(distanceDiff ~ springMigpropDev:sp1dist,data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#best
+model4d <- train(distanceDiff ~ winter2feedAccess:sp1dist,data = y2y,method = "glm",
+                        family = "gaussian",trControl = fitControl,preProcess = c('center', 'scale'))
+
+model5d <- train(distanceDiff ~ meanDFP:sp1dist,data = y2y, method = "glm",family = "gaussian",
+                trControl = fitControl,preProcess = c('center', 'scale'))
+
+model6d <- train(distanceDiff ~ maxSnow:sp1dist,data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl,preProcess = c('center', 'scale'))
+
+model7d <- train(distanceDiff ~ diversity:sp1dist,data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+#all two variable combinations interacted with strategy
+
+model8d <- train(distanceDiff ~ propCrop:winter2propDev:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model9d <- train(distanceDiff ~ propCrop:springMigpropDev:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model10d <- train(distanceDiff ~ propCrop:winter2feedAccess:sp1dist, data = y2y,method = "glm",
+                 family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+model11d <- train(distanceDiff ~ propCrop:meanDFP:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model12d <- train(distanceDiff ~ propCrop:maxSnow:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model13d <- train(distanceDiff ~ propCrop:diversity:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model14d <- train(distanceDiff ~ winter2propDev:springMigpropDev:sp1dist, data = y2y,method = "glm",
+                 family = "gaussian", trControl = fitControl, preProcess = c('center', 'scale'))
+model15d <- train(distanceDiff ~ winter2propDev:winter2feedAccess:sp1dist, data = y2y,method = "glm",
+                 family = "gaussian",trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+model16d <- train(distanceDiff ~ winter2propDev:meanDFP:sp1dist, data = y2y,method = "glm",
+                 family = "gaussian", trControl = fitControl, preProcess = c('center', 'scale'))
+
+model17d <- train(distanceDiff ~ winter2propDev:maxSnow:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model18d <- train(distanceDiff ~ winter2propDev:diversity:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model19d <- train(distanceDiff ~ springMigpropDev:winter2feedAccess:sp1dist, data = y2y,method = "glm",
+                 family = "gaussian",trControl = fitControl, preProcess = c('center', 'scale'))
+
+model20d <- train(distanceDiff ~ springMigpropDev:meanDFP:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model21d <- train(distanceDiff ~ springMigpropDev:maxSnow:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model22d <- train(distanceDiff ~ springMigpropDev:diversity:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model23d <- train(distanceDiff ~ winter2feedAccess:meanDFP:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model24d <- train(distanceDiff ~ winter2feedAccess:maxSnow:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model25d <- train(distanceDiff ~ winter2feedAccess:diversity:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+model26d <- train(distanceDiff ~ meanDFP:maxSnow:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model27d <- train(distanceDiff ~ meanDFP:diversity:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model28d <- train(distanceDiff ~ maxSnow:diversity:sp1dist, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+AICcmodavg::aictab(list(model1d$finalModel, model2d$finalModel, model3d$finalModel, model4d$finalModel,
+                        model5d$finalModel, model6d$finalModel, model7d$finalModel, model8d$finalModel, 
+                        model9d$finalModel, model10d$finalModel, model11d$finalModel, model12d$finalModel, 
+                        model13d$finalModel, model14d$finalModel, model15d$finalModel, model16d$finalModel,
+                        model17d$finalModel, model18d$finalModel, model19d$finalModel, model20d$finalModel,
+                        model21d$finalModel, model22d$finalModel, model23d$finalModel, model24d$finalModel,
+                        model25d$finalModel, model26d$finalModel, model27d$finalModel, model28d$finalModel))
+```
+
+```{r model glm elev diff AIC 2, eval = F}
+y2y$sp1elev <- abs(y2y$sp1elev)
+y2y$sp2elev <- abs(y2y$sp2elev)
+y2y$elevDiff <- y2y$sp2elev - y2y$sp1elev
+
+
+
+fitControl <- trainControl() 
+
+#one variable models with strategy interaction
+model1e <- train(elevDiff ~ propCrop:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale')) 
+
+model2e <- train(elevDiff ~ winter2propDev:sp1elev, data = y2y, method = "glm", family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model3e <- train(elevDiff ~ springMigpropDev:sp1elev,data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#best
+model4e <- train(elevDiff ~ winter2feedAccess:sp1elev,data = y2y,method = "glm",
+                        family = "gaussian",trControl = fitControl,preProcess = c('center', 'scale'))
+
+
+model5e <- train(elevDiff ~ meanDFP:sp1elev,data = y2y, method = "glm",family = "gaussian",
+                trControl = fitControl,preProcess = c('center', 'scale'))
+
+model6e <- train(elevDiff ~ maxSnow:sp1elev,data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl,preProcess = c('center', 'scale'))
+
+model7e <- train(elevDiff ~ diversity:sp1elev,data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+#all two variable combinations interacted with strategy
+
+model8e <- train(elevDiff ~ propCrop:winter2propDev:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model9e <- train(elevDiff ~ propCrop:springMigpropDev:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model10e <- train(elevDiff ~ propCrop:winter2feedAccess:sp1elev, data = y2y,method = "glm",
+                 family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+model11e <- train(elevDiff ~ propCrop:meanDFP:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model12e <- train(elevDiff ~ propCrop:maxSnow:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model13e <- train(elevDiff ~ propCrop:diversity:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model14e <- train(elevDiff ~ winter2propDev:springMigpropDev:sp1elev, data = y2y,method = "glm",
+                 family = "gaussian", trControl = fitControl, preProcess = c('center', 'scale'))
+model15e <- train(elevDiff ~ winter2propDev:winter2feedAccess:sp1elev, data = y2y,method = "glm",
+                 family = "gaussian",trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+model16e <- train(elevDiff ~ winter2propDev:meanDFP:sp1elev, data = y2y,method = "glm",
+                 family = "gaussian", trControl = fitControl, preProcess = c('center', 'scale'))
+
+model17e <- train(elevDiff ~ winter2propDev:maxSnow:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model18e <- train(elevDiff ~ winter2propDev:diversity:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model19e <- train(elevDiff ~ springMigpropDev:winter2feedAccess:sp1elev, data = y2y,method = "glm",
+                 family = "gaussian",trControl = fitControl, preProcess = c('center', 'scale'))
+
+model20e <- train(elevDiff ~ springMigpropDev:meanDFP:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model21e <- train(elevDiff ~ springMigpropDev:maxSnow:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model22e <- train(elevDiff ~ springMigpropDev:diversity:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model23e <- train(elevDiff ~ winter2feedAccess:meanDFP:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model24e <- train(elevDiff ~ winter2feedAccess:maxSnow:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model25e <- train(elevDiff ~ winter2feedAccess:diversity:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+model26e <- train(elevDiff ~ meanDFP:maxSnow:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+model27e <- train(elevDiff ~ meanDFP:diversity:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model28e <- train(elevDiff ~ maxSnow:diversity:sp1elev, data = y2y,method = "glm",family = "gaussian",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+AICcmodavg::aictab(list(model1e$finalModel, model2e$finalModel, model3e$finalModel, model4e$finalModel,
+                        model5e$finalModel, model6e$finalModel, model7e$finalModel, model8e$finalModel, 
+                        model9e$finalModel, model10e$finalModel, model11e$finalModel, model12e$finalModel, 
+                        model13e$finalModel, model14e$finalModel, model15e$finalModel, model16e$finalModel,
+                        model17e$finalModel, model18e$finalModel, model19e$finalModel, model20e$finalModel,
+                        model21e$finalModel, model22e$finalModel, model23e$finalModel, model24e$finalModel,
+                        model25e$finalModel, model26e$finalModel, model27e$finalModel, model28e$finalModel))
+```
+
+
+```{r model glmnet AIC 2}
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$strat1 <- as.factor(y2y$strat1)
+y2y <- y2y %>% mutate(switch = ifelse(switch == T, 1, 0)) %>%
+    mutate(switch = as.character(switch)) 
+
+fitControl <- trainControl(sampling = "down", summaryFunction = prSummary, method = "LOOCV") 
+
+#one variable models with strategy interaction
+model1 <- train(switch ~ propCrop:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F") 
+coef(model1$finalModel)
+model2 <- train(switch ~ winter2propDev:strat1, data = y2y, method = "glmnet", family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+#warning
+model3 <- train(switch ~ springMigpropDev:strat1,data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model4 <- train(switch ~ winter2feedAccess:strat1,data = y2y,method = "glmnet", metric = "F",
+#                         family = "binomial",trControl = fitControl,preProcess = c('center', 'scale'))
+
+model4 <- train(switch ~ meanDFP:strat1,data = y2y, method = "glmnet",family = "binomial",
+                trControl = fitControl,preProcess = c('center', 'scale'), metric = "F")
+
+model5 <- train(switch ~ maxSnow:strat1,data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl,preProcess = c('center', 'scale'), metric = "F")
+
+model6 <- train(switch ~ diversity:strat1,data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
+#                         model5$finalModel, model6$finalModel, model7$finalModel))
+
+#all two variable combinations interacted with strategy
+#warning
+model7 <- train(switch ~ propCrop:winter2propDev:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model8 <- train(switch ~ propCrop:springMigpropDev:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model10 <- train(switch ~ propCrop:winter2feedAccess:strat1, data = y2y,method = "glmnet",family = "binomial",
+#                         trControl = fitControl, preProcess = c('center', 'scale'))
+
+model9 <- train(switch ~ propCrop:meanDFP:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+model10 <- train(switch ~ propCrop:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+#warning
+model11 <- train(switch ~ propCrop:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model12 <- train(switch ~ winter2propDev:springMigpropDev:strat1, data = y2y,method = "glmnet",
+                 family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model15 <- train(switch ~ winter2propDev:winter2feedAccess:strat1, data = y2y,method = "glmnet",
+#                  family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+model13 <- train(switch ~ winter2propDev:meanDFP:strat1, data = y2y,method = "glmnet",
+                 family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+model14 <- train(switch ~ winter2propDev:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model15 <- train(switch ~ winter2propDev:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model19 <- train(switch ~ springMigpropDev:winter2feedAccess:strat1, data = y2y,method = "glmnet",
+#                  family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+model16 <- train(switch ~ springMigpropDev:meanDFP:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model17 <- train(switch ~ springMigpropDev:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+#warning
+model18 <- train(switch ~ springMigpropDev:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+# model23 <- train(switch ~ winter2feedAccess:meanDFP:strat1, data = y2y,method = "glmnet",family = "binomial",
+#                         trControl = fitControl, preProcess = c('center', 'scale'))
+# 
+# model24 <- train(switch ~ winter2feedAccess:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+#                         trControl = fitControl, preProcess = c('center', 'scale'))
+# 
+# model25 <- train(switch ~ winter2feedAccess:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+#                         trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+model19 <- train(switch ~ meanDFP:maxSnow:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+model20 <- train(switch ~ meanDFP:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+model21 <- train(switch ~ maxSnow:diversity:strat1, data = y2y,method = "glmnet",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'), metric = "F")
+
+
+model1$results %>% mutate(model = 21) %>% filter(`F` == max(`F`))
+
+AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
+                        model5$finalModel, model6$finalModel, model7$finalModel, model8$finalModel, 
+                        model9$finalModel, model10$finalModel, model11$finalModel, model12$finalModel, 
+                        model13$finalModel, model14$finalModel, model15$finalModel, model16$finalModel,
+                        model17$finalModel, model18$finalModel, model19$finalModel, model20$finalModel,
+                        model21$finalModel))
+```
+
+
+
+
+```{r predictive model, echo = FALSE, warning = FALSE}
+topMod <- mods %>% filter(AIC <= min(AIC) + 2)
+
+vars <- topMod$vars[1][[1]]
+
+data <- y2y %>% 
+    dplyr::select(switch, vars, strat1) %>% mutate(switch = ifelse(switch == T, 1, 0))  %>%
+    mutate(switch = as.factor(switch))
+
+set.seed(1)
+fitControl <- trainControl(method = "LOOCV",
+                           sampling = "down", summaryFunction = prSummary) 
+
+
+model.cv <- train(switch ~ .^2,
+                    data = data,
+                    method = "glm",
+                    family = "binomial",
+                    trControl = fitControl, 
+                    metric = "F",
+                    preProcess = c('center', 'scale')) 
+
+summary(model.cv$finalModel)
+
+ggplot(y2y) + geom_jitter(aes(x = winter2propDev, y = switch, color = winter2feedAccess))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+Because only want to focus on the big changes, and 75% of data has a magnitude of shift less than 9km, models would not fit large shifts well.
+
+```{r y2y plastic, echo=FALSE, fig.show="hold", out.width="50%"}
+ggplot(y2y) + geom_point(aes(sp1dist, abs(sp1elev)), color = "red", alpha = .5) +
+  geom_point(aes(sp2dist, abs(sp2elev)), color = "blue", alpha = .5) +
+  geom_segment(aes(x = sp1dist, y = abs(sp1elev), 
+                   xend = sp2dist, yend = abs(sp2elev)),alpha = .2, 
+               arrow = arrow(length=unit(0.20,"cm"), type = "closed")) +
+  ylab("Absolute elevation change") + xlab("Geographic distance") + theme_bw() + theme(legend.position = "none") + ggtitle("Figure 3a.")
+
+#change to red center and blue arrow, with magnitude opacity
+ggplot(y2y) + geom_segment(aes(x = 0, y = 0, xend = distanceDiff, yend= elevDiff), alpha = .2,
+                                 arrow = arrow(length = unit(0.05, "inches"))) +
+  geom_point(aes(x = distanceDiff, y = elevDiff), color = "blue", alpha = .2) +
+    geom_point(aes(x = 0, y = 0), color = "red", size = 4, alpha = .25) +
+  xlab("Difference in distance from year 1 to year 2") + 
+  ylab("Difference in elevation change from year 1 to year 2") +
+  geom_text(x = 50000, y = 2000, label = "Increased distance and  \n elevation change \n (31.6%)", size = 3) +
+  geom_text(x = 50000, y = -2300, label = "Increased distance and  \n decreased elevation change \n (18.9%)", size = 3) +
+  geom_text(x = -35000, y = -2000, label = "Decreased distance and  \n elevation change \n (30.7%)", size = 3) +
+  geom_text(x = -35000, y = 1000, label = "Decreased distance and  \n increased elevation change \n (18.9%)", size = 3) +
+  theme_bw() + ggtitle("Figure 3b.")
+
+
+#either focus on changes that double/halve, or
+
+
+
+relDistEls <- y2y %>% mutate(relativeDist = sp2dist/sp1dist, relativeElev = abs(sp2elev/sp1elev)) %>%
+  mutate(big = ifelse(relativeDist < .5 | relativeDist >= 2 | relativeElev < .5 | relativeElev >= 2,
+                      T, F),
+         big = ifelse(is.nan(relativeDist), F, big))
+
+
+relDistEls %>%
+  #filter(relativeDist < 10) %>%
+  ggplot() + geom_point(aes(relativeDist, relativeElev, color = big)) +
+  scale_x_continuous(breaks = 1:10)
+
+relVecs <- y2y %>% mutate(vec1 = sqrt(sp1elev^2 + sp1dist^2), vec2 = sqrt(sp2elev^2 + sp2dist^2),
+               relVec = vec2/vec1, big = ifelse(relVec >= 2 | relVec < .5, T, F))
+
+
+
+relVecs %>%
+  ggplot() + geom_point(aes(vec1, vec2, color = big))
+
+
+```
