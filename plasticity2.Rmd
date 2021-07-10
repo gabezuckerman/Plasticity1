@@ -588,10 +588,82 @@ conf <- conf %>% mutate(sig = (low > 0 & high > 0) | (low < 0 & high < 0))
 
 
 ```{r visualizing model average, echo = F}
-newdata1 <- with(data = y2y, data.frame(indSpringLen = seq(0, 110000, by = 100),
-                                         herdFallLen = mean(herdFallLen),
-                                         distanceDiff = mean(distanceDiff)))
+
+
+data(Cement)
+
+
+
+
+newdata <- as.data.frame(lapply(lapply(as.data.table(avg$x)[, 2:29][, -9], getzero), rep, 25))
+newdata$`springMigpropDev:strat1EM` <- seq(min(y2y$springMigpropDev), max(y2y$springMigpropDev), length.out = 25)
+
+#need to figure out how to get into newdata
+predict(avg, newdata, se.fit = T, type = "response")
+
+
+# ogNames <- colnames(newdata1)
+# 
+# colnames(newdata1) <- make.names(colnames(newdata1))
+# 
+# target <- newdata1$X.springMigpropDev.strat1EM.
+# 
+# modifiedNameOrder <- colnames(newdata1)
+# 
+# 
+# getzero <- function(x) {return(0)}
+# 
+# newdata1 <- newdata1 %>% select(-X.springMigpropDev.strat1EM.) %>% mutate_all(getzero)
+# 
+# newdata1$X.springMigpropDev.strat1EM. <- seq(min(target), max(target), length.out = 478)
+# 
+# newdata1 <- newdata1 %>% select(modifiedNameOrder)
+# 
+# colnames(newdata1) <- colnames(avg$x)
+# 
+
+
+
+
 
 ```
 
+
+```{r example}
+
+# New predictors: X1 along the range of original data, other
+# variables held constant at their means
+newdata <- as.data.frame(lapply(lapply(Cement[, -1], mean), rep, 25))
+newdata$X1 <- nseq(Cement$X1, nrow(newdata))
+
+n <- length(confset.95p)
+
+# Predictions from each of the models in a set, and with averaged coefficients
+pred <- data.frame(
+	model = sapply(confset.95p, predict, newdata = newdata),
+	averaged.subset = predict(avgm, newdata, full = FALSE),
+    averaged.full = predict(avgm, newdata, full = TRUE)
+	)
+
+opal <- palette(c(topo.colors(n), "black", "red", "orange"))
+matplot(newdata$X1, pred, type = "l",
+	lwd = c(rep(2,n),3,3), lty = 1,
+    xlab = "X1", ylab = "y", col=1:7)
+
+# For comparison, prediction obtained by averaging predictions of the component
+# models
+pred.se <- predict(avgm, newdata, se.fit = TRUE)
+y <- pred.se$fit
+ci <- pred.se$se.fit  * 2
+matplot(newdata$X1, cbind(y, y - ci, y + ci), add = TRUE, type="l",
+	lty = 2, col = n + 3, lwd = 3)
+
+legend("topleft",
+    legend=c(lapply(confset.95p, formula),
+        paste(c("subset", "full"), "averaged"), "averaged predictions + CI"),
+    lty = 1, lwd = c(rep(2,n),3,3,3),  cex = .75, col=1:8)
+
+palette(opal)
+
+```
 
