@@ -1093,7 +1093,7 @@ newdata3$season <- "During spring migration"
 
 
 newdata <- rbindlist(list(newdata1, newdata3), fill = T) %>%
-  mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul))
+  mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul), pred = ifelse(pred > 1, 1, pred))
 
 forRug <- y2y %>% filter(strat1 == "LDM") %>% select(dev = springMigpropDev) %>% mutate(season = "During spring migration") %>%
   rbind(
@@ -1110,7 +1110,7 @@ ggplot(newdata) +
   ylab("Probability of switching") + 
   xlab("Proportion of developed lands") + 
   theme_bw() + theme(legend.title = element_blank()) + 
-  geom_rug(data = forRug, aes(dev, color = season))
+  geom_rug(data = forRug, aes(dev, color = season)) + xlim(0.000001, 0.05)
 
 
 
@@ -1133,13 +1133,14 @@ newdata5$ll <- p$fit - 1.44 * p$se.fit
 newdata5$ul <- p$fit + 1.44 * p$se.fit
 
 
-ggplot(newdata5) + geom_tile(aes(x = winter2propDev, y = springMigpropDev, fill = pred)) +
+ggplot(newdata5) + 
+  geom_tile(aes(x = winter2propDev, y = springMigpropDev, fill = pred)) +
   theme_bw() + xlab("Proportion of winter range in developed land") +
   ylab("Proportion of spring migratory period in developed land") +
   scale_fill_viridis_c(option = "B", direction = -1, name = "P(switch)", breaks = seq(.1, 1, by = .2)) +
   geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(winter2propDev), sides = "b") +
   #this one not showing up
-  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(springMigpropDev), sides = "l")
+  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(y = springMigpropDev), sides = "l")
 
 ```
 
