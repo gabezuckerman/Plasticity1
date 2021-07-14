@@ -626,3 +626,774 @@ relVecs %>%
 
 
 ```
+
+
+```{r visualizing model average, echo = F}
+##############averaging top models
+library(MuMIn)
+avg <- model.avg(list(model10$finalModel, model3$finalModel, model22$finalModel,
+               model21$finalModel, model15$finalModel), revised.var = T)
+conf <- as.data.table(confint(avg, subset = T))
+conf$cov <- rownames(confint(avg, subset = T))
+colnames(conf) <- c("low", "high", "cov")
+conf$estimate <- avg$coefficients[2,] %>% as.numeric()
+
+conf <- conf %>% mutate(sig = (low > 0 & high > 0) | (low < 0 & high < 0))
+
+data(Cement)
+
+
+
+dataForModel <- as.data.table(avg$x)
+
+
+
+newdata <- as.data.frame(lapply(lapply(as.data.table(avg$x)[, 2:29][, -9], getzero), rep, 25))
+newdata$`springMigpropDev:strat1EM` <- seq(min(y2y$springMigpropDev), max(y2y$springMigpropDev), length.out = 25)
+
+#need to figure out how to get into newdata
+predict(avg, backtransform = T, se.fit = T, type = "response")
+
+
+# ogNames <- colnames(newdata1)
+# 
+# colnames(newdata1) <- make.names(colnames(newdata1))
+# 
+# target <- newdata1$X.springMigpropDev.strat1EM.
+# 
+# modifiedNameOrder <- colnames(newdata1)
+# 
+# 
+# getzero <- function(x) {return(0)}
+# 
+# newdata1 <- newdata1 %>% select(-X.springMigpropDev.strat1EM.) %>% mutate_all(getzero)
+# 
+# newdata1$X.springMigpropDev.strat1EM. <- seq(min(target), max(target), length.out = 478)
+# 
+# newdata1 <- newdata1 %>% select(modifiedNameOrder)
+# 
+# colnames(newdata1) <- colnames(avg$x)
+# 
+
+
+
+
+
+```
+
+
+
+```{r model glm AIC 2, echo = F}
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$strat1 <- as.factor(y2y$strat1)
+y2y$strat2 <- as.factor(y2y$strat2)
+y2y <- y2y %>% mutate(switch = ifelse(switch == T, 1, 0)) %>%
+    mutate(switch = as.character(switch))
+
+fitControl <- trainControl() 
+
+#not competitive
+null <- lm(switch ~ 1, data = y2y, family = "binomial")
+
+#one variable models with strategy interaction
+model1 <- train(switch ~ propCrop:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale')) 
+
+model2 <- train(switch ~ winter2propDev:strat1, data = y2y, method = "glm", family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model3 <- train(switch ~ springMigpropDev:strat1,data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+#warning
+model4 <- train(switch ~ winter2feedAccess:strat1,data = y2y,method = "glm",
+                        family = "binomial",trControl = fitControl,preProcess = c('center', 'scale'))
+
+model5 <- train(switch ~ meanDFP:strat1,data = y2y, method = "glm",family = "binomial",
+                trControl = fitControl,preProcess = c('center', 'scale'))
+
+model6 <- train(switch ~ maxSnow:strat1,data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl,preProcess = c('center', 'scale'))
+
+model7 <- train(switch ~ diversity:strat1,data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model8 <- train(switch ~ propCrop:winter2propDev:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model9 <- train(switch ~ propCrop:springMigpropDev:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model10 <- train(switch ~ propCrop:winter2feedAccess:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model11 <- train(switch ~ propCrop:meanDFP:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model12 <- train(switch ~ propCrop:maxSnow:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model13 <- train(switch ~ propCrop:diversity:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model14 <- train(switch ~ winter2propDev:springMigpropDev:strat1, data = y2y,method = "glm",
+                 family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model15 <- train(switch ~ winter2propDev:winter2feedAccess:strat1, data = y2y,method = "glm",
+                 family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+model16 <- train(switch ~ winter2propDev:meanDFP:strat1, data = y2y,method = "glm",
+                 family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'))
+
+model17 <- train(switch ~ winter2propDev:maxSnow:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model18 <- train(switch ~ winter2propDev:diversity:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model19 <- train(switch ~ springMigpropDev:winter2feedAccess:strat1, data = y2y,method = "glm",
+                 family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model20 <- train(switch ~ springMigpropDev:meanDFP:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model21 <- train(switch ~ springMigpropDev:maxSnow:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model22 <- train(switch ~ springMigpropDev:diversity:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+#warning
+model23 <- train(switch ~ winter2feedAccess:meanDFP:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model24 <- train(switch ~ winter2feedAccess:maxSnow:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model25 <- train(switch ~ winter2feedAccess:diversity:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+model26 <- train(switch ~ meanDFP:maxSnow:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model27 <- train(switch ~ meanDFP:diversity:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model28 <- train(switch ~ maxSnow:diversity:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
+                        model5$finalModel, model6$finalModel, model7$finalModel, model8$finalModel, 
+                        model9$finalModel, model10$finalModel, model11$finalModel, model12$finalModel, 
+                        model13$finalModel, model14$finalModel, model15$finalModel, model16$finalModel,
+                        model17$finalModel, model18$finalModel, model19$finalModel, model20$finalModel,
+                        model21$finalModel, model22$finalModel, model23$finalModel, model24$finalModel,
+                        model25$finalModel, model26$finalModel, model27$finalModel, model28$finalModel))
+
+```
+
+
+```{r top models binary, echo = F, eval = F}
+fitControl2 <- trainControl(summaryFunction = prSummary, method = "LOOCV") 
+
+################ 474.38, no informative covariates
+
+model10 <- train(switch ~ propCrop:winter2feedAccess:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#metrics from eggemen
+
+#hl gof test: X-squared = 10.616, df = 8, p-value = 0.2244
+ResourceSelection::hoslem.test(model10$finalModel$y, fitted(model10$finalModel))
+
+#auc precision-recall: 0.32
+MLmetrics::PRAUC(fitted(model10$finalModel), model10$finalModel$y)
+
+#cv: f = 0.87, precision = 0.78, recall = 0.99
+train(switch ~ propCrop:winter2feedAccess:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl2, preProcess = c('center', 'scale'), metric = "F")
+
+################ 475.03, 2 out of 4 informative covs
+
+model3 <- train(switch ~ springMigpropDev:strat1,data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#metrics from eggemen
+
+#hl gof test: X-squared = 2.1881, df = 8, p-value = 0.9747
+ResourceSelection::hoslem.test(model3$finalModel$y, fitted(model3$finalModel))
+
+#auc: 0.31, precision recal curve
+MLmetrics::PRAUC(fitted(model3$finalModel), model3$finalModel$y)
+
+#cv: F = 0.87, precision = 0.78, recall = 0.99
+train(switch ~ springMigpropDev:strat1,data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl2, preProcess = c('center', 'scale'), metric = "F")
+
+################ 475.24, 1 out of 4 significant covs
+
+model21 <- train(switch ~ springMigpropDev:maxSnow:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#metrics from eggemen
+
+#hl gof test: X-squared = 2.5062, df = 8, p-value = 0.9614
+ResourceSelection::hoslem.test(model21$finalModel$y, fitted(model21$finalModel))
+
+#auc = 0.31, precision recal curve
+MLmetrics::PRAUC(fitted(model21$finalModel), model21$finalModel$y)
+
+#cv: F = 0.88, precision = 0.78, recall = 0.997
+train(switch ~ springMigpropDev:maxSnow:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl2, preProcess = c('center', 'scale'), metric = "F")
+
+################ 476.20, no significant covs
+
+model15 <- train(switch ~ winter2propDev:winter2feedAccess:strat1, data = y2y,method = "glm",
+                 family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+#metrics from eggemen
+
+#hl gof test: X-squared = 15.081, df = 8, p-value = 0.05759
+ResourceSelection::hoslem.test(model15$finalModel$y, fitted(model15$finalModel))
+
+#auc precision_recall curve: 0.33
+MLmetrics::PRAUC(fitted(model15$finalModel), model15$finalModel$y)
+
+#cv: F = 0.87, precision = 0.78, recall = 0.99
+train(switch ~ winter2propDev:winter2feedAccess:strat1, data = y2y,method = "glm", metric = "F",
+                 family = "binomial",trControl = fitControl2, preProcess = c('center', 'scale'))
+
+################ 476.21, one significant cov
+
+model22 <- train(switch ~ springMigpropDev:diversity:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+#metrics from eggemen
+
+#hl gof test: X-squared = 4.7101, df = 8, p-value = 0.7881
+ResourceSelection::hoslem.test(model22$finalModel$y, fitted(model22$finalModel))
+
+#auc = 0.31, precision recal curve
+MLmetrics::PRAUC(fitted(model22$finalModel), model22$finalModel$y)
+
+#cv: F = 0.88, precision = 0.78, recall = 0.99
+train(switch ~ springMigpropDev:diversity:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl2, preProcess = c('center', 'scale'), metric = "F")
+
+
+```
+
+```{r visualizing informative covs from model 3, echo = F}
+
+model3 <- train(switch ~ springMigpropDev:strat1,data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+preproc <- preProcess(y2y %>% select(springMigpropDev, strat1), method = c("center", "scale"))
+
+#spring mig dev, em
+newdata1 <- with(data = model3$trainingData, data.frame(springMigpropDev = seq(0, 0.05, by = .0001),
+                                         strat1 = "EM"))
+
+newdata2 <- predict(preproc, newdata1)
+
+newdata2$'springMigpropDev:strat1EM' <- newdata2$springMigpropDev
+newdata2$'springMigpropDev:strat1LDM' <- 0
+newdata2$'springMigpropDev:strat1SDM' <- 0
+newdata2$'springMigpropDev:strat1R' <- 0
+
+
+p <- predict(model3$finalModel, newdata = newdata2,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+newdata1$pred <- p$fit
+newdata1$ll <- p$se.fit - 1.96 * p$fit
+newdata1$ul <- p$se.fit + 1.96 * p$fit
+
+#spring mig dev, sdm
+newdata3 <- with(data = model3$trainingData, data.frame(springMigpropDev = seq(0, 0.2, by = .001),
+                                         strat1 = "SDM"))
+
+newdata4 <- predict(preproc, newdata3)
+
+newdata4$'springMigpropDev:strat1EM' <- 0
+newdata4$'springMigpropDev:strat1LDM' <- 0
+newdata4$'springMigpropDev:strat1SDM' <- newdata4$springMigpropDev
+newdata4$'springMigpropDev:strat1R' <- 0
+
+
+p2 <- predict(model3$finalModel, newdata = newdata4,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+
+newdata3$pred <- p2$fit
+newdata3$ll <- p2$se.fit - 1.96 * p2$fit
+newdata3$ul <- p2$se.fit + 1.96 * p2$fit
+
+
+newdata <- rbind(newdata1, newdata3) %>% mutate(ll = ifelse(ll < 0, 0 , ll))
+
+ggplot(y2y %>% filter(strat1 == "SDM")) + geom_jitter(aes(maxSnow, switch, color = switch), width = 0)
+
+ggplot(newdata) + 
+  geom_line( aes(x = springMigpropDev, y = pred, color = strat1)) +
+  geom_ribbon(aes(x = springMigpropDev, y = pred, ymin = ll,ymax = ul, fill = strat1), alpha = 0.2) + 
+  theme_bw() + ylab("Probability of switching") + 
+  xlab("Proportion of migratory period range with developed land") +
+  scale_color_manual(name = "Initial strategy", labels = c("EM", "SDM"), values = c("red", "blue")) +
+  scale_fill_manual(name = "Initial strategy", labels = c("EM", "SDM"), values = c("red", "blue")) +
+  geom_rug(data = y2y %>% filter(strat1 %in% c("SDM", "EM")), 
+           aes(springMigpropDev, color = strat1), sides = "b")
+
+
+```
+
+```
+```{r visualizing informative covs from model 22, echo = F}
+
+model22 <- train(switch ~ springMigpropDev:diversity:strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+preproc <- preProcess(y2y %>% select(springMigpropDev, strat1, diversity), method = c("center", "scale"))
+
+#spring mig dev(max .2), snow (max 3.5 meters), sdm
+grid <- expand.grid(seq(0, .2, .001), seq(0, 30000, 100))
+
+
+newdata1 <- with(data = model3$trainingData, data.frame(springMigpropDev = grid$Var1,
+                                                        diversity = grid$Var2,
+                                         strat1 = "SDM"))
+
+newdata2 <- predict(preproc, newdata1)
+
+newdata2$'springMigpropDev:diversity:strat1EM' <- 0
+newdata2$'springMigpropDev:diversity:strat1LDM' <- 0
+newdata2$'springMigpropDev:diversity:strat1SDM' <- newdata2$diversity * newdata2$springMigpropDev
+newdata2$'springMigpropDev:diversity:strat1R' <- 0
+
+
+p <- predict(model22$finalModel, newdata = newdata2,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+newdata1$pred <- p$fit
+newdata1$ll <- p$se.fit - 1.96 * p$fit
+newdata1$ul <- p$se.fit + 1.96 * p$fit
+
+ggplot(y2y %>% filter(strat1 == "SDM")) + geom_point(aes(springMigpropDev, diversity, color = switch))
+
+test1 <- ggplot(newdata1) + geom_tile(aes(x = springMigpropDev, diversity, fill = pred)) +
+  scale_fill_viridis_c(name = "P(switch)", breaks = seq(.1, 1, by = .2)) + 
+  theme_bw() + xlab("Proportion of migratory period range with developed land") +
+  ylab("Herd-level diversity")
+
+test1
+
+#plot_gg(test1)
+
+```
+
+```{r model glm AIC all strats together, echo = F, eval = F}
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- as.factor(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- relevel(y2y$winter2feedAccess, "0")
+y2y$strat1 <- as.factor(y2y$strat1)
+y2y$strat1 <- relevel(y2y$strat1, "LDM")
+y2y <- y2y %>% mutate(switch = ifelse(switch == T, 1, 0)) %>%
+    mutate(switch = as.character(switch))
+
+fitControl <- trainControl() 
+
+#not competitive
+null <- lm(switch ~ 1, data = y2y, family = "binomial")
+
+#one variable models with strategy interaction
+model1 <- train(switch ~ propCrop*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale')) 
+
+model2 <- train(switch ~ winter2propDev*strat1, data = y2y, method = "glm", family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model3 <- train(switch ~ springMigpropDev*strat1,data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+#warning
+model4 <- train(switch ~ winter2feedAccess*strat1,data = y2y,method = "glm",
+                        family = "binomial",trControl = fitControl,preProcess = c('center', 'scale'))
+
+model5 <- train(switch ~ meanDFP*strat1,data = y2y, method = "glm",family = "binomial",
+                trControl = fitControl,preProcess = c('center', 'scale'))
+
+model6 <- train(switch ~ maxSnow*strat1,data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl,preProcess = c('center', 'scale'))
+
+model7 <- train(switch ~ diversity*strat1,data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model8 <- train(switch ~ propCrop*winter2propDev*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model9 <- train(switch ~ propCrop*springMigpropDev*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model10 <- train(switch ~ propCrop*winter2feedAccess*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model11 <- train(switch ~ propCrop*meanDFP*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model12 <- train(switch ~ propCrop*maxSnow*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model13 <- train(switch ~ propCrop*diversity*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model14 <- train(switch ~ winter2propDev*springMigpropDev*strat1, data = y2y,method = "glm",
+                 family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model15 <- train(switch ~ winter2propDev*winter2feedAccess*strat1, data = y2y,method = "glm",
+                 family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+model16 <- train(switch ~ winter2propDev*meanDFP*strat1, data = y2y,method = "glm",
+                 family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'))
+
+model17 <- train(switch ~ winter2propDev*maxSnow*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model18 <- train(switch ~ winter2propDev*diversity*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model19 <- train(switch ~ springMigpropDev*winter2feedAccess*strat1, data = y2y,method = "glm",
+                 family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model20 <- train(switch ~ springMigpropDev*meanDFP*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model21 <- train(switch ~ springMigpropDev*maxSnow*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#warning
+model22 <- train(switch ~ springMigpropDev*diversity*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+#warning
+model23 <- train(switch ~ winter2feedAccess*meanDFP*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model24 <- train(switch ~ winter2feedAccess*maxSnow*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+#warning
+model25 <- train(switch ~ winter2feedAccess*diversity*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+model26 <- train(switch ~ meanDFP*maxSnow*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model27 <- train(switch ~ meanDFP*diversity*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+model28 <- train(switch ~ maxSnow*diversity*strat1, data = y2y,method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+
+
+AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
+                        model5$finalModel, model6$finalModel, model7$finalModel, model8$finalModel, 
+                        model9$finalModel, model10$finalModel, model11$finalModel, model12$finalModel, 
+                        model13$finalModel, model14$finalModel, model15$finalModel, model16$finalModel,
+                        model17$finalModel, model18$finalModel, model19$finalModel, model20$finalModel,
+                        model21$finalModel, model22$finalModel, model23$finalModel, model24$finalModel,
+                        model25$finalModel, model26$finalModel, model27$finalModel, model28$finalModel))
+
+```
+
+
+```{r visualizing informative covs from model 15, echo = F}
+
+model15 <- train(switch ~ winter2propDev*winter2feedAccess*strat1, data = y2y,method = "glm",
+                 family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+coef <- confint(model15$finalModel, level = .95) %>% as.data.frame() %>% 
+  mutate(sig = ifelse((`2.5 %` < 0 & `97.5 %` < 0) | (`2.5 %` > 0 & `97.5 %` > 0), T, F))
+
+preproc <- preProcess(y2y %>% select(winter2propDev, strat1, winter2feedAccess),
+                      method = c("center", "scale"))
+
+#winter2propDev
+
+#with feed access
+
+newdata3 <- with(data = model15$trainingData, data.frame(winter2propDev = seq(0, 0.1, by = 0.001),
+                                                         winter2feedAccess1 = 1))
+
+newdata4 <- predict(preproc, newdata3)
+
+newdata4$strat1R <- 0
+newdata4$strat1EM <- 0
+newdata4$strat1SDM <- 0
+#this one
+newdata4$`winter2propDev:winter2feedAccess1` <- newdata4$winter2propDev * newdata4$winter2feedAccess1
+newdata4$`winter2propDev:strat1EM` <- 0
+newdata4$`winter2propDev:strat1R` <- 0
+newdata4$`winter2propDev:strat1SDM` <- 0
+newdata4$`winter2feedAccess1:strat1EM` <- 0
+newdata4$`winter2feedAccess1:strat1R` <- 0
+newdata4$`winter2feedAccess1:strat1SDM` <- 0
+newdata4$`winter2propDev:winter2feedAccess1:strat1EM` <- 0
+newdata4$`winter2propDev:winter2feedAccess1:strat1R` <- 0
+newdata4$`winter2propDev:winter2feedAccess1:strat1SDM` <- 0
+
+
+
+p <- predict(model15$finalModel, newdata = newdata4,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+newdata3$pred <- p$fit
+newdata3$ll <- p$fit - 1.96 * p$se.fit
+newdata3$ul <- p$fit + 1.96 * p$se.fit
+
+newdata3$group <- "Fed"
+
+
+#for R
+newdata5 <- with(data = model15$trainingData, data.frame(winter2propDev = seq(0, 0.1, by = 0.001),
+                                                         strat1EM = 0))
+
+newdata6 <- predict(preproc, newdata5)
+
+newdata6$winter2feedAccess1 <- 0
+newdata6$strat1R <- 1
+newdata6$strat1SDM <- 0
+newdata6$`winter2propDev:winter2feedAccess1` <- 0
+#this one
+newdata6$`winter2propDev:strat1EM` <- newdata6$winter2propDev
+newdata6$`winter2propDev:strat1R` <- 0
+newdata6$`winter2propDev:strat1SDM` <- 0
+newdata6$`winter2feedAccess1:strat1EM` <- 0
+newdata6$`winter2feedAccess1:strat1R` <- 0
+newdata6$`winter2feedAccess1:strat1SDM` <- 0
+newdata6$`winter2propDev:winter2feedAccess1:strat1EM` <- 0
+newdata6$`winter2propDev:winter2feedAccess1:strat1R` <- 0
+newdata6$`winter2propDev:winter2feedAccess1:strat1SDM` <- 0
+
+
+
+p <- predict(model15$finalModel, newdata = newdata6,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+newdata5$pred <- p$fit
+newdata5$ll <- p$fit - 1.96 * p$se.fit
+newdata5$ul <- p$fit + 1.96 * p$se.fit
+
+newdata5$group <- "R"
+
+#for LDM
+newdata7 <- with(data = model15$trainingData, data.frame(winter2propDev = seq(0, 0.1, by = 0.001)))
+
+newdata8 <- predict(preproc, newdata7)
+
+newdata8$winter2feedAccess1 <- 0
+newdata8$strat1R <- 0
+newdata8$strat1SDM <- 0
+newdata8$strat1EM <- 0
+newdata8$`winter2propDev:winter2feedAccess1` <- 0
+newdata8$`winter2propDev:strat1EM` <- 0
+newdata8$`winter2propDev:strat1R` <- 0
+newdata8$`winter2propDev:strat1SDM` <- 0
+newdata8$`winter2feedAccess1:strat1EM` <- 0
+newdata8$`winter2feedAccess1:strat1R` <- 0
+newdata8$`winter2feedAccess1:strat1SDM` <- 0
+newdata8$`winter2propDev:winter2feedAccess1:strat1EM` <- 0
+newdata8$`winter2propDev:winter2feedAccess1:strat1R` <- 0
+newdata8$`winter2propDev:winter2feedAccess1:strat1SDM` <- 0
+
+
+
+p <- predict(model15$finalModel, newdata = newdata8,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+newdata7$pred <- p$fit
+newdata7$ll <- p$fit - 1.96 * p$se.fit
+newdata7$ul <- p$fit + 1.96 * p$se.fit
+
+newdata7$group <- "Unfed LDM"
+
+
+newdata <- rbindlist(list(newdata3, newdata5, newdata7), fill = T)
+newdata <- newdata %>% mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 0.00007, 0.00007, ul))
+
+
+ggplot(newdata) + 
+  geom_line( aes(x = winter2propDev, y = pred, color = group), size = 1, alpha = 0.8) +
+  geom_ribbon(aes(x = winter2propDev, y = pred, ymin = ll,ymax = ul, fill = group), alpha = 0.2)+
+  ylim(0, 0.00007) + ylab("Probability of switching") + 
+  xlab("Proportion of winter range in developed land") + 
+  theme_bw() + theme(legend.title = element_blank())
+
+```
+
+
+```{r visualizing informative covs from model 15 p2, echo = F}
+
+model15 <- train(switch ~ winter2propDev*winter2feedAccess*strat1, data = y2y,method = "glm",
+                 family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+
+coef <- confint(model15$finalModel, level = .95) %>% as.data.frame() %>% 
+  mutate(sig = ifelse((`2.5 %` < 0 & `97.5 %` < 0) | (`2.5 %` > 0 & `97.5 %` > 0), T, F))
+
+preproc <- preProcess(y2y %>% select(winter2propDev, strat1, winter2feedAccess),
+                      method = c("center", "scale"))
+
+#winter dev with feed access
+newdata1 <- with(data = model15$trainingData, data.frame(winter2propDev = seq(0, 0.1, by = 0.001),
+                                                         winter2feedAccess1 = 1, strat1SDM = 1))
+
+newdata2 <- predict(preproc, newdata1)
+
+newdata2$strat1R <- 0
+newdata2$strat1EM <- 0
+newdata2$`winter2propDev:winter2feedAccess1` <- newdata2$winter2propDev * newdata2$winter2feedAccess1
+newdata2$`winter2propDev:strat1EM` <- 0
+newdata2$`winter2propDev:strat1R` <- 0
+newdata2$`winter2propDev:strat1SDM` <- 0
+newdata2$`winter2feedAccess1:strat1EM` <- 0
+newdata2$`winter2feedAccess1:strat1R` <- 0
+newdata2$`winter2feedAccess1:strat1SDM` <- 0
+newdata2$`winter2propDev:winter2feedAccess1:strat1EM` <- 0
+newdata2$`winter2propDev:winter2feedAccess1:strat1R` <- 0
+#this one
+newdata2$`winter2propDev:winter2feedAccess1:strat1SDM` <- 
+  newdata2$winter2propDev * newdata2$winter2feedAccess1 * 1
+
+
+
+p <- predict(model15$finalModel, newdata = newdata2,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+newdata1$pred <- p$fit
+newdata1$ll <- p$fit - 1.96 * p$se.fit
+newdata1$ul <- p$fit + 1.96 * p$se.fit
+newdata1$group <- "Fed SDM"
+newdata1$group2 <- "SDM"
+
+
+#winter dev without feed access
+newdata3 <- with(data = model15$trainingData, data.frame(winter2propDev = seq(0, 0.1, by = 0.001),
+                                                         winter2feedAccess1 = 0, strat1SDM = 1))
+
+newdata4 <- predict(preproc, newdata3)
+
+newdata4$strat1R <- 0
+newdata4$strat1EM <- 0
+newdata4$`winter2propDev:winter2feedAccess1` <- 0
+newdata4$`winter2propDev:strat1EM` <- 0
+newdata4$`winter2propDev:strat1R` <- 0
+newdata4$`winter2propDev:strat1SDM` <- 0
+newdata4$`winter2feedAccess1:strat1EM` <- 0
+newdata4$`winter2feedAccess1:strat1R` <- 0
+newdata4$`winter2feedAccess1:strat1SDM` <- 0
+newdata4$`winter2propDev:winter2feedAccess1:strat1EM` <- 0
+newdata4$`winter2propDev:winter2feedAccess1:strat1R` <- 0
+#this one
+newdata4$`winter2propDev:winter2feedAccess1:strat1SDM` <- 0
+
+p <- predict(model15$finalModel, newdata = newdata4,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+newdata3$pred <- p$fit
+newdata3$ll <- p$fit - 1.96 * p$se.fit
+newdata3$ul <- p$fit + 1.96 * p$se.fit
+newdata3$group <- "Unfed SDM"
+newdata3$group2 <- "SDM"
+
+
+#winter dev without feed access LDM
+newdata5 <- with(data = model15$trainingData, data.frame(winter2propDev = seq(0, 0.1, by = 0.001),
+                                                         winter2feedAccess1 = 0, strat1SDM = 0))
+
+newdata6 <- predict(preproc, newdata1)
+
+newdata6$strat1R <- 0
+newdata6$strat1EM <- 0
+newdata6$`winter2propDev:winter2feedAccess1` <- 0
+newdata6$`winter2propDev:strat1EM` <- 0
+newdata6$`winter2propDev:strat1R` <- 0
+newdata6$`winter2propDev:strat1SDM` <- 0
+newdata6$`winter2feedAccess1:strat1EM` <- 0
+newdata6$`winter2feedAccess1:strat1R` <- 0
+newdata6$`winter2feedAccess1:strat1SDM` <- 0
+newdata6$`winter2propDev:winter2feedAccess1:strat1EM` <- 0
+newdata6$`winter2propDev:winter2feedAccess1:strat1R` <- 0
+#this one
+newdata6$`winter2propDev:winter2feedAccess1:strat1SDM` <- 0
+
+p <- predict(model15$finalModel, newdata = newdata6,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+newdata5$pred <- p$fit
+newdata5$ll <- p$fit - 1.96 * p$se.fit
+newdata5$ul <- p$fit + 1.96 * p$se.fit
+newdata5$group <- "Unfed LDM"
+newdata5$group2 <- "LDM"
+
+
+#winter dev with feed access LDM
+newdata7 <- with(data = model15$trainingData, data.frame(winter2propDev = seq(0, 0.1, by = 0.001),
+                                                         winter2feedAccess1 = 1, strat1SDM = 0))
+
+newdata8 <- predict(preproc, newdata7)
+
+newdata8$strat1R <- 0
+newdata8$strat1EM <- 0
+newdata8$`winter2propDev:winter2feedAccess1` <- newdata8$winter2propDev * newdata8$winter2feedAccess1
+newdata8$`winter2propDev:strat1EM` <- 0
+newdata8$`winter2propDev:strat1R` <- 0
+newdata8$`winter2propDev:strat1SDM` <- 0
+newdata8$`winter2feedAccess1:strat1EM` <- 0
+newdata8$`winter2feedAccess1:strat1R` <- 0
+newdata8$`winter2feedAccess1:strat1SDM` <- 0
+newdata8$`winter2propDev:winter2feedAccess1:strat1EM` <- 0
+newdata8$`winter2propDev:winter2feedAccess1:strat1R` <- 0
+#this one
+newdata8$`winter2propDev:winter2feedAccess1:strat1SDM` <- 0
+
+p <- predict(model15$finalModel, newdata = newdata8,
+             interval="confidence",se.fit = T, level = 0.95, type = "response")
+
+newdata7$pred <- p$fit
+newdata7$ll <- p$fit - 1.96 * p$se.fit
+newdata7$ul <- p$fit + 1.96 * p$se.fit
+newdata7$group <- "Fed LDM"
+newdata7$group2 <- "LDM"
+
+newdata <- rbindlist(list(newdata1, newdata3, newdata5, newdata7), fill = T) %>%
+  mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul))
+
+
+ggplot(newdata) + 
+  geom_line(aes(x = winter2propDev, y = pred, color = group), alpha = .8) +
+  geom_ribbon(aes(x = winter2propDev, y = pred, ymin = ll,ymax = ul, fill = group), alpha = 0.2) +
+  ylab("Probability of switching") + 
+  xlab("Proportion of winter range in developed land") + 
+  theme_bw() + theme(legend.title = element_blank()) + facet_grid(~group2)
+
+
+
+```
