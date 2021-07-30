@@ -20,6 +20,7 @@ library(furrr)
 library(caret)
 library(lubridate)
 library(Hmisc)
+library(vegan)
 
 
 
@@ -99,7 +100,7 @@ ggplot(allIndYears) + geom_point(aes(dists, absElev, color = class), alpha = .5)
 
 ```
 
-```{r first day DNHM, echo = F}
+```{r first day DNHM, echo = F, eval = F}
 library(plotly)
 
 set.seed(1)
@@ -261,15 +262,27 @@ snow <- fread("../Switching3/covariates/snow/snodasExtraction.csv") %>% group_by
 y2y <- y2y %>% merge(snow)
 
 #add herd diversity
-hd <- allIndYears %>% filter(elk %in% y2y$elk) %>% merge(
-  y2y %>% dplyr::select(elk, herd)
-) %>% mutate(vecDist = sqrt(dists^2 + elevs^2)) %>% group_by(herd) %>%summarise(diversity = sd(vecDist))
+shannonHdiversity <- function(h){
+  herdTable <- allIndYears %>% filter(elk %in% y2y$elk) %>% merge(
+    y2y %>% dplyr::select(elk, herd)
+  ) %>% filter(herd == h) 
+  
+  props <- as.numeric(table(herdTable$class) / sum(table(herdTable$class)))
+  hSum <- 0
+  for(i in 1:length(props)) {
+    hSum <- hSum + props[i]*log(props[i])
+  }
+  
+  return(data.table(herd = h, diversity = -1*hSum))
+}
+
+hd <- map_dfr(unique(y2y$herd), shannonHdiversity)
 
 y2y <- y2y %>% merge(hd, by = "herd") %>% select(switchID, elk, herd, everything())
 
 ```
 
-``` {r alluvial, echo = F}
+``` {r alluvial, echo = F, eval = F}
 forAlluv <- y2y %>% group_by(strat1, strat2) %>% dplyr::summarise(n = n())
 
 #all = 105/478 = 22%
@@ -432,7 +445,7 @@ model28 <- train(switch ~ maxSnow*diversity, data = y2y %>% filter(strat1 == "R"
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
 
-#models 2, 5, 6, 7: no 95% sig covs; 1 sig cov at 85% (model 5)
+#models 2, 5, 6, 7, 25, 28: no 95% sig covs; 1 sig cov at 85% (model 5)
 AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
                         model5$finalModel, model6$finalModel, model7$finalModel, model8$finalModel, 
                         model9$finalModel, model10$finalModel, model11$finalModel, model12$finalModel, 
@@ -524,7 +537,7 @@ preproc <- preProcess(y2y %>% filter(strat1 == "R") %>% select(diversity),
                       method = c("center", "scale"))
 
 #diversity
-newdata1 <- with(data = model5$trainingData, data.frame(diversity = seq(0, 20000, by = 100)))
+newdata1 <- with(data = model5$trainingData, data.frame(diversity = seq(0, 1.5, by = 0.01)))
 
 newdata2 <- predict(preproc, newdata1)
 
@@ -661,7 +674,7 @@ model28 <- train(switch ~ maxSnow*diversity, data = y2y %>% filter(strat1 == "EM
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
 
-#models 1, 2, 3, 4, 5, 6, 7, 15, no 95% or 85% sig covs
+#models 2, 3, 4, 5, 18 
 AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
                         model5$finalModel, model6$finalModel, model7$finalModel, model8$finalModel, 
                         model9$finalModel, model10$finalModel, model11$finalModel, model12$finalModel, 
@@ -674,62 +687,100 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 
 ```{r visualizing informative covs for EM, echo = F, eval = F}
 
-model15 <- train(switch ~ winter2propDev*winter2feedAccess, data = y2y %>% filter(strat1 == "EM"),
-                 method = "glm",
-                 family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
+model18 <- train(switch ~ winter2propDev*diversity, data = y2y %>% filter(strat1 == "EM"),
+                 method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
 
-coef <- confint(model15$finalModel, level = .85) %>% as.data.frame() %>% 
+coef <- confint(model18$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
-preproc <- preProcess(y2y %>% filter(strat1 == "EM") %>% select(winter2propDev, winter2feedAccess),
+preproc <- preProcess(y2y %>% filter(strat1 == "EM") %>% select(winter2propDev, diversity),
                       method = c("center", "scale"))
 
-#winterDev with feed
-newdata1 <- with(data = model15$trainingData, data.frame(winter2propDev = seq(0, 0.06, by = 0.001),
-                                                        winter2feedAccess1 = 1))
+#winterDev
+newdata1 <- with(data = model18$trainingData, data.frame(winter2propDev = seq(0, 0.06, by = 0.001),
+                                                         diversity = 0))
 
 newdata2 <- predict(preproc, newdata1)
 
-newdata2$`winter2propDev:winter2feedAccess1` <- newdata2$winter2propDev
+newdata2$diversity <- 0
+newdata2$`winter2propDev:diversity` <- 0
 
-p <- predict(model15$finalModel, newdata = newdata2,
+p <- predict(model18$finalModel, newdata = newdata2,
              interval="confidence",se.fit = T, level = 0.85, type = "response")
 
 newdata1$pred <- p$fit
 newdata1$ll <- p$fit - 1.44 * p$se.fit
 newdata1$ul <- p$fit + 1.44 * p$se.fit
-newdata1$fed <- T
+
+newdata1 <- newdata1 %>% mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul))
+
+dev <- ggplot(newdata1) + 
+  geom_line(aes(x = winter2propDev, y = pred), alpha = .8) +
+  geom_ribbon(aes(x = winter2propDev, y = pred, ymin = ll,ymax = ul), alpha = 0.2) +
+  ylab("Probability of switching") + 
+  xlab("Proportion of winter range in developed land") + 
+  theme_bw() + theme(legend.title = element_blank()) +
+  geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(winter2propDev))
+
 
 #winterDev without feed
-newdata3 <- with(data = model15$trainingData, data.frame(winter2propDev = seq(0, 0.06, by = 0.001),
-                                                        winter2feedAccess1 = 0))
+newdata3 <- with(data = model18$trainingData, data.frame(winter2propDev = 0,
+                                                         diversity = seq(0, 1.5, by = 0.01)))
 
 newdata4 <- predict(preproc, newdata3)
 
-newdata4$`winter2propDev:winter2feedAccess1` <- 0
+newdata4$winter2propDev <- 0
+newdata4$`winter2propDev:diversity` <- 0
 
-p <- predict(model15$finalModel, newdata = newdata4,
+p <- predict(model18$finalModel, newdata = newdata4,
              interval="confidence",se.fit = T, level = 0.85, type = "response")
 
 newdata3$pred <- p$fit
 newdata3$ll <- p$fit - 1.44 * p$se.fit
 newdata3$ul <- p$fit + 1.44 * p$se.fit
-newdata3$fed <- F
 
+newdata3 <- newdata3 %>% mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul))
 
-
-newdata <- rbind(newdata1, newdata3) %>%  mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul))
-
-ggplot(newdata) + 
-  geom_line(aes(x = winter2propDev, y = pred, color = fed), alpha = .8) +
-  geom_ribbon(aes(x = winter2propDev, y = pred, ymin = ll,ymax = ul, fill = fed), alpha = 0.2) +
+div <- ggplot(newdata3) + 
+  geom_line(aes(x = diversity, y = pred), alpha = .8) +
+  geom_ribbon(aes(x = diversity, y = pred, ymin = ll,ymax = ul), alpha = 0.2) +
   ylab("Probability of switching") + 
-  xlab("Proportion of winter range in developed land") + 
-  theme_bw() + labs(fill = "Fed", color = "Fed") +
-  geom_rug(data = y2y %>% filter(strat1 == "EM") %>% 
-             mutate(winter2feedAccess = ifelse(winter2feedAccess == 1, T, F)),
-           aes(winter2propDev, color = winter2feedAccess))
+  xlab("Herd-level diversity") + 
+  theme_bw() + theme(legend.title = element_blank()) +
+  geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(diversity))
 
+#interaction
+grid <- expand.grid(seq(0, 0.06, by = 0.001), seq(0, 1.5, by = 0.01))
+
+
+newdata5 <- with(data = model18$trainingData, data.frame(winter2propDev = grid$Var1,
+                                                         diversity = grid$Var2))
+
+newdata6 <- predict(preproc, newdata5)
+
+newdata6$`winter2propDev:diversity` <- newdata6$winter2propDev*newdata6$diversity
+
+p <- predict(model18$finalModel, newdata = newdata6,
+             interval="confidence",se.fit = T, level = 0.85, type = "response")
+
+newdata5$pred <- p$fit
+newdata5$ll <- p$fit - 1.44 * p$se.fit
+newdata5$ul <- p$fit + 1.44 * p$se.fit
+
+newdata5 <- newdata5 %>% mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul))
+
+
+interaction <- ggplot(newdata5) + 
+  geom_tile(aes(x = winter2propDev, y = diversity, fill = pred)) +
+  theme_bw() + xlab("Proportion of winter range in developed land") +
+  ylab("Herd-level diversity") +
+  scale_fill_viridis_c(option = "B", direction = -1, name = "P(switch)", breaks = seq(.1, 1, by = .2)) +
+  geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(winter2propDev), sides = "b") +
+  #this one not showing up
+  geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(y = diversity), sides = "l")
+
+ggpubr::ggarrange(dev, div, interaction, labels = c("A.", "B.", "C."))
 
 ```
 
@@ -843,7 +894,7 @@ model28 <- train(switch ~ maxSnow*diversity, data = y2y %>% filter(strat1 == "SD
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
 
-#model 10: 1 sig cov at 95% and 85%
+#model 10, 22: 1 sig cov at 95% and 85%
 AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
                         model5$finalModel, model6$finalModel, model7$finalModel, model8$finalModel, 
                         model9$finalModel, model10$finalModel, model11$finalModel, model12$finalModel, 
@@ -891,7 +942,6 @@ newdata3 <- with(data = model10$trainingData, data.frame(propCrop = seq(0, 1, by
                                                         winter2feedAccess1 = 0))
 
 newdata4 <- predict(preproc, newdata3)
-
 newdata4$`propCrop:winter2feedAccess1` <- 0
 
 p <- predict(model10$finalModel, newdata = newdata4,
@@ -907,7 +957,7 @@ newdata3$fed <- F
 newdata <- rbindlist(list(newdata1, newdata3), fill = T) %>%
   mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul))
 
-ggplot(newdata) + 
+interaction <- ggplot(newdata) + 
   geom_line(aes(x = propCrop, y = pred, color = fed), alpha = .8) +
   geom_ribbon(aes(x = propCrop, y = pred, ymin = ll,ymax = ul, fill = fed), alpha = 0.2) +
   ylab("Probability of switching") + 
@@ -917,6 +967,42 @@ ggplot(newdata) +
              mutate(winter2feedAccess = ifelse(winter2feedAccess == 1, T, F)),
            aes(propCrop, color = winter2feedAccess))
 
+
+#diversity from model22, but not on its own?
+model22 <- train(switch ~ springMigpropDev*diversity, data = y2y %>% filter(strat1 == "SDM"),method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+coef <- confint(model22$finalModel, level = .85) %>% as.data.frame() %>% 
+  mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
+
+preproc <- preProcess(y2y %>% filter(strat1 == "SDM") %>% select(springMigpropDev, diversity),
+                      method = c("center", "scale"))
+
+newdata5 <- with(data = model22$trainingData, data.frame(springMigpropDev = 0,
+                                                        diversity = seq(0, 1.5, by = 0.01)))
+
+newdata6 <- predict(preproc, newdata5)
+newdata6$springMigpropDev <- 0
+newdata6$`springMigpropDev:diversity` <- 0
+
+p <- predict(model22$finalModel, newdata = newdata6,
+             interval="confidence",se.fit = T, level = 0.85, type = "response")
+
+newdata5$pred <- p$fit
+newdata5$ll <- p$fit - 1.44 * p$se.fit
+newdata5$ul <- p$fit + 1.44 * p$se.fit
+
+newdata5 <- newdata5 %>% mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul))
+
+div <- ggplot(newdata5) + 
+  geom_line(aes(x = diversity, y = pred), alpha = .8) +
+  geom_ribbon(aes(x = diversity, y = pred, ymin = ll,ymax = ul), alpha = 0.2) +
+  ylab("Probability of switching") + 
+  xlab("Herd-level diversity") + 
+  theme_bw() + theme(legend.title = element_blank()) +
+  geom_rug(data = y2y %>% filter(strat1 == "SDM"), aes(diversity))
+
+ggpubr::ggarrange(interaction, div, labels = c("A.", "B."))
 
 ```
 
@@ -1042,7 +1128,7 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 ```
 
 
-```{r visualizing informative covs for SDM, echo = F, eval = F}
+```{r visualizing informative covs for LDM, echo = F, eval = F}
 #warning
 model14 <- train(switch ~ winter2propDev*springMigpropDev, data = y2y %>% filter(strat1 == "LDM"),
                  method = "glm",
