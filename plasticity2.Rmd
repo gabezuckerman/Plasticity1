@@ -751,7 +751,7 @@ div <- ggplot(newdata3) +
   geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(diversity))
 
 #interaction
-grid <- expand.grid(seq(0, 0.06, by = 0.001), seq(0, 1.5, by = 0.01))
+grid <- expand.grid(seq(0, 0.06, by = 0.0001), seq(0, 1.5, by = 0.001))
 
 
 newdata5 <- with(data = model18$trainingData, data.frame(winter2propDev = grid$Var1,
@@ -1188,7 +1188,7 @@ forRug <- y2y %>% filter(strat1 == "LDM") %>% select(dev = springMigpropDev) %>%
 
 
 #weird spike at 1
-ggplot(newdata) + 
+dev <- ggplot(newdata) + 
   geom_line(aes(x = winter2propDev, y = pred, color = season), alpha = .8) +
   geom_ribbon(aes(x = winter2propDev, y = pred, ymin = ll, ymax = ul, fill = season), alpha = 0.2) +
   geom_line(aes(x = springMigpropDev, y = pred, color = season), alpha = .8) +
@@ -1219,7 +1219,7 @@ newdata5$ll <- p$fit - 1.44 * p$se.fit
 newdata5$ul <- p$fit + 1.44 * p$se.fit
 
 
-ggplot(newdata5) + 
+interaction <- ggplot(newdata5) + 
   geom_tile(aes(x = winter2propDev, y = springMigpropDev, fill = pred)) +
   theme_bw() + xlab("Proportion of winter range in developed land") +
   ylab("Proportion of spring migratory period in developed land") +
@@ -1227,6 +1227,9 @@ ggplot(newdata5) +
   geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(winter2propDev), sides = "b") +
   #this one not showing up
   geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(y = springMigpropDev), sides = "l")
+
+ggpubr::ggarrange(interaction, dev, labels = c("A.", "B."))
+
 
 ```
 
