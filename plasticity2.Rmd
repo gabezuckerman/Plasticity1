@@ -276,11 +276,46 @@ shannonHdiversity <- function(h){
   return(data.table(herd = h, diversity = -1*hSum))
 }
 
+#max value is 1.386294, where each of the 4 strategies has the same number of individuals
 hd <- map_dfr(unique(y2y$herd), shannonHdiversity)
 
-y2y <- y2y %>% merge(hd, by = "herd") %>% select(switchID, elk, herd, everything())
+y2y <- y2y %>% merge(hd, by = "herd") %>% dplyr::select(switchID, elk, herd, everything())
 
 ```
+
+``` {r basic movement tactic results, echo = F, eval = F}
+#do I want to redo classifcation with only used individuals? 7 elk years off
+y2yResults <- y2y %>% mutate(elkYear1 = paste(elk, year1, sep = "_"), elkYear2 = paste(elk, year2, sep = "_"))
+
+usedIndYears <- allIndYears %>% filter(elkYear %in% y2yResults$elkYear1 | 
+                                     elkYear %in% y2yResults$elkYear2)
+
+yearlyDist <- strategyByYear <- usedIndYears %>% merge(gps) %>%
+  mutate(actualYear = startDateYear + 1) %>%
+  group_by(actualYear, class) %>% summarise(n = n()) %>% merge(
+    usedIndYears %>% merge(gps) %>% mutate(actualYear = startDateYear + 1) %>%
+       group_by(actualYear) %>% summarise(total = n())
+  ) %>% mutate(prop = n / total)
+
+ggplot(yearlyDist) + geom_point(aes(actualYear, prop, color = class)) + 
+  geom_line(aes(actualYear, prop, color = class)) +
+  scale_x_continuous(breaks = unique(yearlyDist$actualYear))
+
+annualSwitching <- y2y %>% group_by(strat1, years) %>% summarise(sr = sum(as.numeric(switch))/n())
+sd(filter(annualSwitching, strat1 == "SDM")$sr)
+
+yearlyBalance <- y2y %>% filter(switch == T) %>% group_by(years, strat1, strat2) %>% summarise(n = n()) %>% 
+  mutate(type = paste(strat1, strat2, sep = " - ")) %>% ungroup() %>% dplyr::select(-strat2, -strat1)%>%
+  pivot_wider(names_from = type, values_from = n) 
+
+yearlyBalance[is.na(yearlyBalance)] <- 0
+
+yearlyBalance$totalSwitches <-rowSums(yearlyBalance[, 2:12 ])
+
+fwrite(yearlyBalance, "balancing.csv")
+
+```
+
 
 ``` {r alluvial, echo = F, eval = F}
 forAlluv <- y2y %>% group_by(strat1, strat2) %>% dplyr::summarise(n = n())
@@ -309,7 +344,7 @@ ggplot(forAlluv %>% filter(strat1 != strat2),
 ``` {r vifTesting, echo = FALSE, eval = FALSE}
 #all two-way combinations of variables pass VIF threshold test
 
-vars <- colnames(y2y)[17:22]
+vars <- colnames(y2y)[17:23]
 
 #all two way combinations of variables
 combos <- combn(vars, 2) %>% t() %>% as.data.table()
@@ -322,7 +357,7 @@ combos <- combn(vars, 2) %>% t() %>% as.data.table()
 #for positive
 vifTest <- function(comboNum) {
   
-  vifs <- vif(y2y %>% filter(strat1 == "R") %>% dplyr::select(combos[comboNum,] %>% as.character()))
+  vifs <- vif(y2y %>% filter(strat1 == "LDM") %>% dplyr::select(combos[comboNum,] %>% as.character()))
   
   if(!is.na(all(vifs$VIF<2)) &  all(vifs$VIF<2) == T){
     data.table(vars = list(combos[comboNum,] %>% as.character()), passVIF = T) %>% return()
@@ -331,6 +366,7 @@ vifTest <- function(comboNum) {
   }
 }
 
+map_dfr(1:21, vifTest)
 
 ```
 
@@ -374,85 +410,82 @@ model7 <- train(switch ~ diversity,data = y2y %>% filter(strat1 == "R"),method =
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
 #warning
-model8 <- train(switch ~ propCrop*winter2propDev, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model8 <- train(switch ~ propCrop*springMigpropDev, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 #warning
-model9 <- train(switch ~ propCrop*springMigpropDev, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
-                        trControl = fitControl, preProcess = c('center', 'scale'))
-#warning
-model10 <- train(switch ~ propCrop*winter2feedAccess, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model9 <- train(switch ~ propCrop*winter2feedAccess, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
-model11 <- train(switch ~ propCrop*meanDFP, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model10 <- train(switch ~ propCrop*meanDFP, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
-model12 <- train(switch ~ propCrop*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model11 <- train(switch ~ propCrop*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
 #warning
-model13 <- train(switch ~ propCrop*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model12 <- train(switch ~ propCrop*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 #warning
-model14 <- train(switch ~ winter2propDev*springMigpropDev, data = y2y %>% filter(strat1 == "R"),method = "glm",
+model13 <- train(switch ~ winter2propDev*springMigpropDev, data = y2y %>% filter(strat1 == "R"),method = "glm",
                  family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'))
 #warning
-model15 <- train(switch ~ winter2propDev*winter2feedAccess, data = y2y %>% filter(strat1 == "R"),method = "glm",
+model14 <- train(switch ~ winter2propDev*winter2feedAccess, data = y2y %>% filter(strat1 == "R"),method = "glm",
                  family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
 
 
-model16 <- train(switch ~ winter2propDev*meanDFP, data = y2y %>% filter(strat1 == "R"),method = "glm",
+model15 <- train(switch ~ winter2propDev*meanDFP, data = y2y %>% filter(strat1 == "R"),method = "glm",
                  family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'))
 
-model17 <- train(switch ~ winter2propDev*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model16 <- train(switch ~ winter2propDev*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 #warning
-model18 <- train(switch ~ winter2propDev*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model17 <- train(switch ~ winter2propDev*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 #warning
-model19 <- train(switch ~ springMigpropDev*winter2feedAccess, data = y2y %>% filter(strat1 == "R"),method = "glm",
+model18 <- train(switch ~ springMigpropDev*winter2feedAccess, data = y2y %>% filter(strat1 == "R"),method = "glm",
                  family = "binomial",trControl = fitControl, preProcess = c('center', 'scale'))
 
 #warning
-model20 <- train(switch ~ springMigpropDev*meanDFP, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model19 <- train(switch ~ springMigpropDev*meanDFP, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 #warning
-model21 <- train(switch ~ springMigpropDev*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model20 <- train(switch ~ springMigpropDev*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
 #warning
-model22 <- train(switch ~ springMigpropDev*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model21 <- train(switch ~ springMigpropDev*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
 
 #warning
-model23 <- train(switch ~ winter2feedAccess*meanDFP, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model22 <- train(switch ~ winter2feedAccess*meanDFP, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 #warning
-model24 <- train(switch ~ winter2feedAccess*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model23 <- train(switch ~ winter2feedAccess*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 #warning
-model25 <- train(switch ~ winter2feedAccess*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model24 <- train(switch ~ winter2feedAccess*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
 
-model26 <- train(switch ~ meanDFP*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model25 <- train(switch ~ meanDFP*maxSnow, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
-model27 <- train(switch ~ meanDFP*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model26 <- train(switch ~ meanDFP*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
-model28 <- train(switch ~ maxSnow*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
+model27 <- train(switch ~ maxSnow*diversity, data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
 
-#models 2, 5, 6, 7, 25, 28: no 95% sig covs; 1 sig cov at 85% (model 5)
+#models 2, 5, 6, 7, 24, 27: no 95% sig covs; 1 sig cov at 85% (model 5)
 AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
                         model5$finalModel, model6$finalModel, model7$finalModel, model8$finalModel, 
                         model9$finalModel, model10$finalModel, model11$finalModel, model12$finalModel, 
                         model13$finalModel, model14$finalModel, model15$finalModel, model16$finalModel,
                         model17$finalModel, model18$finalModel, model19$finalModel, model20$finalModel,
                         model21$finalModel, model22$finalModel, model23$finalModel, model24$finalModel,
-                        model25$finalModel, model26$finalModel, model27$finalModel, model28$finalModel))
+                        model25$finalModel, model26$finalModel, model27$finalModel))
 
 ```
 
@@ -465,11 +498,13 @@ model5 <- train(switch ~ meanDFP,data = y2y %>% filter(strat1 == "R"), method = 
 coef <- confint(model5$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
-preproc <- preProcess(y2y %>% filter(strat1 == "R") %>% select(meanDFP),
+preproc <- preProcess(y2y %>% filter(strat1 == "R") %>% dplyr::select(meanDFP),
                       method = c("center", "scale"))
 
 #meanDFP
-newdata1 <- with(data = model5$trainingData, data.frame(meanDFP = seq(0, 100, by = 1)))
+newdata1 <- with(data = model5$trainingData, 
+                 data.frame(meanDFP = seq(min(filter(y2y, strat1 == "R")$meanDFP),
+                                          max(filter(y2y, strat1 == "R")$meanDFP), by = 1)))
 
 newdata2 <- predict(preproc, newdata1)
 
@@ -489,7 +524,9 @@ meanDFP <- ggplot(newdata1) +
   ylab("Probability of switching") + 
   xlab("Mean days from peak green up during herd-level migratory period") + 
   theme_bw() + theme(legend.title = element_blank()) +
-  geom_rug(data = y2y %>% filter(strat1 == "R"), aes(meanDFP))
+  geom_rug(data = y2y %>% filter(strat1 == "R"), aes(meanDFP)) +
+  scale_x_continuous(breaks = seq(0, 80, 10)) +
+  scale_y_continuous(breaks = seq(0, 1, .1))
 
 ##########################
 
@@ -499,11 +536,13 @@ model6 <- train(switch ~ maxSnow,data = y2y %>% filter(strat1 == "R"),method = "
 coef <- confint(model6$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
-preproc <- preProcess(y2y %>% filter(strat1 == "R") %>% select(maxSnow),
+preproc <- preProcess(y2y %>% filter(strat1 == "R") %>% dplyr::select(maxSnow),
                       method = c("center", "scale"))
 
 #snow
-newdata1 <- with(data = model5$trainingData, data.frame(maxSnow = seq(0, 3.5, by = .01)))
+newdata1 <- with(data = model5$trainingData, 
+                 data.frame(maxSnow = seq(min(filter(y2y, strat1 == "R")$maxSnow),
+                                          max(filter(y2y, strat1 == "R")$maxSnow), by = .01)))
 
 newdata2 <- predict(preproc, newdata1)
 
@@ -523,7 +562,9 @@ maxSnow <- ggplot(newdata1) +
   ylab("Probability of switching") + 
   xlab("Maximum snow depth in winter range (m)") + 
   theme_bw() + theme(legend.title = element_blank()) +
-  geom_rug(data = y2y %>% filter(strat1 == "R"), aes(maxSnow))
+  geom_rug(data = y2y %>% filter(strat1 == "R"), aes(maxSnow)) +
+  scale_x_continuous(breaks = seq(0, 4, .5)) +
+  scale_y_continuous(breaks = seq(0, 1, .2))
 
 ##########################
 
@@ -533,11 +574,13 @@ model7 <- train(switch ~ diversity,data = y2y %>% filter(strat1 == "R"),method =
 coef <- confint(model7$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
-preproc <- preProcess(y2y %>% filter(strat1 == "R") %>% select(diversity),
+preproc <- preProcess(y2y %>% filter(strat1 == "R") %>% dplyr::select(diversity),
                       method = c("center", "scale"))
 
 #diversity
-newdata1 <- with(data = model5$trainingData, data.frame(diversity = seq(0, 1.5, by = 0.01)))
+newdata1 <- with(data = model5$trainingData, 
+                 data.frame(diversity = seq(min(filter(y2y, strat1 == "R")$diversity),
+                                          max(filter(y2y, strat1 == "R")$diversity), by = 0.01)))
 
 newdata2 <- predict(preproc, newdata1)
 
@@ -694,11 +737,13 @@ model18 <- train(switch ~ winter2propDev*diversity, data = y2y %>% filter(strat1
 coef <- confint(model18$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
-preproc <- preProcess(y2y %>% filter(strat1 == "EM") %>% select(winter2propDev, diversity),
+preproc <- preProcess(y2y %>% filter(strat1 == "EM") %>% dplyr::select(winter2propDev, diversity),
                       method = c("center", "scale"))
 
 #winterDev
-newdata1 <- with(data = model18$trainingData, data.frame(winter2propDev = seq(0, 0.06, by = 0.001),
+newdata1 <- with(data = model18$trainingData, 
+                 data.frame(winter2propDev = seq(min(filter(y2y, strat1 == "EM")$winter2propDev),
+                                          max(filter(y2y, strat1 == "EM")$winter2propDev), by = 0.001),
                                                          diversity = 0))
 
 newdata2 <- predict(preproc, newdata1)
@@ -725,8 +770,10 @@ dev <- ggplot(newdata1) +
 
 
 #winterDev without feed
-newdata3 <- with(data = model18$trainingData, data.frame(winter2propDev = 0,
-                                                         diversity = seq(0, 1.5, by = 0.01)))
+newdata3 <- with(data = model18$trainingData, 
+                 data.frame(winter2propDev = 0,
+                            diversity = seq(min(filter(y2y, strat1 == "EM")$diversity),
+                                          max(filter(y2y, strat1 == "EM")$diversity), by = 0.01)))
 
 newdata4 <- predict(preproc, newdata3)
 
@@ -751,7 +798,10 @@ div <- ggplot(newdata3) +
   geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(diversity))
 
 #interaction
-grid <- expand.grid(seq(0, 0.06, by = 0.0001), seq(0, 1.5, by = 0.001))
+grid <- expand.grid(
+  seq(min(filter(y2y, strat1 == "EM")$winter2propDev),
+                                          max(filter(y2y, strat1 == "EM")$winter2propDev), by = 0.0001), seq(min(filter(y2y, strat1 == "EM")$diversity),
+                                          max(filter(y2y, strat1 == "EM")$diversity), by = 0.001))
 
 
 newdata5 <- with(data = model18$trainingData, data.frame(winter2propDev = grid$Var1,
@@ -917,7 +967,7 @@ model10 <- train(switch ~ propCrop*winter2feedAccess, data = y2y %>% filter(stra
 coef <- confint(model10$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
-preproc <- preProcess(y2y %>% filter(strat1 == "SDM") %>% select(propCrop, winter2feedAccess),
+preproc <- preProcess(y2y %>% filter(strat1 == "SDM") %>% dplyr::select(propCrop, winter2feedAccess),
                       method = c("center", "scale"))
 #winter2 feed access, sig with access to feedground increasing switching likelihood
 
@@ -938,7 +988,7 @@ newdata1$ul <- p$fit + 1.44 * p$se.fit
 newdata1$fed <- T
 
 #propCrop without feed
-newdata3 <- with(data = model10$trainingData, data.frame(propCrop = seq(0, 1, by = 0.01),
+newdata3 <- with(data = model10$trainingData, data.frame(propCrop = seq(0, 0.83, by = 0.01),
                                                         winter2feedAccess1 = 0))
 
 newdata4 <- predict(preproc, newdata3)
@@ -975,11 +1025,11 @@ model22 <- train(switch ~ springMigpropDev*diversity, data = y2y %>% filter(stra
 coef <- confint(model22$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
-preproc <- preProcess(y2y %>% filter(strat1 == "SDM") %>% select(springMigpropDev, diversity),
+preproc <- preProcess(y2y %>% filter(strat1 == "SDM") %>% dplyr::select(springMigpropDev, diversity),
                       method = c("center", "scale"))
 
 newdata5 <- with(data = model22$trainingData, data.frame(springMigpropDev = 0,
-                                                        diversity = seq(0, 1.5, by = 0.01)))
+                                                        diversity = seq(0, 1.322088, by = 0.01)))
 
 newdata6 <- predict(preproc, newdata5)
 newdata6$springMigpropDev <- 0
@@ -1138,11 +1188,11 @@ model14 <- train(switch ~ winter2propDev*springMigpropDev, data = y2y %>% filter
 coef <- confint(model14$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
-preproc <- preProcess(y2y %>% filter(strat1 == "LDM") %>% select(winter2propDev, springMigpropDev),
+preproc <- preProcess(y2y %>% filter(strat1 == "LDM") %>% dplyr::select(winter2propDev, springMigpropDev),
                       method = c("center", "scale"))
 
 #winter2propDev
-newdata1 <- with(data = model14$trainingData, data.frame(winter2propDev = seq(0, 0.05, by = 0.0001),
+newdata1 <- with(data = model14$trainingData, data.frame(winter2propDev = seq(0, 0.041, by = 0.0001),
                                                          springMigpropDev = 0))
 
 newdata2 <- predict(preproc, newdata1)
@@ -1157,10 +1207,10 @@ p <- predict(model14$finalModel, newdata = newdata2,
 newdata1$pred <- p$fit
 newdata1$ll <- p$fit - 1.44 * p$se.fit
 newdata1$ul <- p$fit + 1.44 * p$se.fit
-newdata1$season <- "In winter range"
+newdata1$season <- "W.R."
 
 #springMigpropDev
-newdata3 <- with(data = model14$trainingData, data.frame(springMigpropDev = seq(0, 0.05, by = 0.0001),
+newdata3 <- with(data = model14$trainingData, data.frame(springMigpropDev = seq(0, 0.033, by = 0.0001),
                                                          winter2propDev = 0))
 
 newdata4 <- predict(preproc, newdata3)
@@ -1174,16 +1224,16 @@ p <- predict(model14$finalModel, newdata = newdata4,
 newdata3$pred <- p$fit
 newdata3$ll <- p$fit - 1.44 * p$se.fit
 newdata3$ul <- p$fit + 1.44 * p$se.fit
-newdata3$season <- "During spring migration"
+newdata3$season <- "Sp. mig."
 
 
 
 newdata <- rbindlist(list(newdata1, newdata3), fill = T) %>%
   mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul), pred = ifelse(pred > 1, 1, pred))
 
-forRug <- y2y %>% filter(strat1 == "LDM") %>% select(dev = springMigpropDev) %>% mutate(season = "During spring migration") %>%
+forRug <- y2y %>% filter(strat1 == "LDM") %>% dplyr::select(dev = springMigpropDev) %>% mutate(season = "Sp. mig.") %>%
   rbind(
-    y2y %>% filter(strat1 == "LDM") %>% select(dev = winter2propDev) %>% mutate(season = "In winter range")
+    y2y %>% filter(strat1 == "LDM") %>% dplyr::select(dev = winter2propDev) %>% mutate(season = "W.R.")
   )
 
 
@@ -1201,7 +1251,7 @@ dev <- ggplot(newdata) +
 
 
 #springMigpropDev:winter2propDev
-grid <- expand.grid(seq(0, 0.05, by = 0.0001), seq(0, 0.05, by = 0.0001))
+grid <- expand.grid(seq(0, 0.041, by = 0.0001), seq(0, 0.033, by = 0.0001))
 
 
 newdata5 <- with(data = model14$trainingData, data.frame(springMigpropDev = grid$Var1,
@@ -1228,7 +1278,7 @@ interaction <- ggplot(newdata5) +
   #this one not showing up
   geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(y = springMigpropDev), sides = "l")
 
-ggpubr::ggarrange(interaction, dev, labels = c("A.", "B."))
+ggpubr::ggarrange(dev, interaction, labels = c("A.", "B."))
 
 
 ```
