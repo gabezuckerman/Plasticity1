@@ -3,6 +3,8 @@ title: "Plasticity/Switching 2"
 author: "Gabe Zuckerman"
 date: "6/23/2021"
 output: html_document
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -88,13 +90,18 @@ nonRes <- allIndYears %>% filter(is.na(class)) %>% mutate(class = k$cluster) %>%
 
 allIndYears <- rbind(allIndYears %>% filter(class == "R"), nonRes)
 
-ggplot(allIndYears) + geom_point(aes(dists, absElev, color = class), alpha = .5) +
-  ylab("Abosulte elevation change") +   xlab("Geographic distance") + 
-  geom_text(x=22500, y=1250, label="Elev. M \n (n = 185 elk-years, 20.8%)") +
-  geom_text(x=22500, y=350, label="SDM \n(n = 470 elk-years, 52.8%)") +
-  geom_text(x = 75000, y = 1000, label = "LDM \n(n = 192 elk-years, 21.6%)") + 
-  geom_text(x = 17500, y = 0, label = "R (n = 43 elk-years, 4.8%)") +
-  theme_bw() + theme(legend.position = "none") + ggtitle("Figure 2.")
+library(extrafont)
+loadfonts(device = "win")
+
+ggplot(allIndYears) + geom_point(aes(dists, absElev, color = class), alpha = .3) +
+  ylab("Abosulte elevation change (m)") +   xlab("Geographic distance (m)") + 
+  geom_text(x=25000, y=1100, label="Elev. M (21.9%)", color = "#1b9e77", size = 9, family = "Century Gothic") +
+  geom_text(x=25000, y=400, label="SDM (53.7%)", color = "#e7298a", size = 9, family = "Century Gothic") +
+  geom_text(x = 75000, y = 1000, label = "LDM (19.6%)", color = "#d95f02", size = 9, family = "Century Gothic") + 
+  geom_text(x = 18000, y = 0, label = "R (4.8%)", color = "#7570b3", size = 9, family = "Century Gothic") +
+  theme_bw() + theme(legend.position = "none", text=element_text(size=16, family = "Century Gothic"), 
+                     plot.title = element_text(hjust = 0.5)) + 
+  scale_color_manual(values = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a")) + ggtitle("Migratory Portfolio")
   
 
 
@@ -317,8 +324,33 @@ fwrite(yearlyBalance, "balancing.csv")
 ```
 
 
+``` {r basic movement tactic lines for map, echo = F, eval = F}
+y2yResults <- y2y %>% mutate(elkYear1 = paste(elk, year1, sep = "_"), elkYear2 = paste(elk, year2, sep = "_"))
+
+#only one year per ind on map
+usedIndYears <- allIndYears %>% filter(elkYear %in% y2yResults$elkYear1 | 
+                                     elkYear %in% y2yResults$elkYear2)  %>% distinct(elk, .keep_all = T)
+
+residents <- usedIndYears %>% filter(class == "R") %>% dplyr::select(elkYear, class)
+em <- usedIndYears %>% filter(class == "EM") %>% sample_n(22) %>% dplyr::select(elkYear, class)
+sdm <- usedIndYears %>% filter(class == "SDM") %>% sample_n(22) %>% dplyr::select(elkYear, class)
+ldm <- usedIndYears %>% filter(class == "LDM") %>% sample_n(22) %>% dplyr::select(elkYear, class)
+
+indsForMap <- rbindlist(list(residents, em, sdm, ldm))
+library(sf)
+
+lines <- fread("../Switching3/movementData/multiburstsNC.csv") %>% filter(elkYear %in% indsForMap$elkYear) %>%
+  merge(indsForMap) %>% arrange(acquisition_time) %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% group_by(elkYear, class) %>%
+  summarise(do_union = F) %>% st_cast("LINESTRING")
+
+st_write(lines, "mapFigs/data", "lines", driver = "ESRI Shapefile", append = F)
+
+
+```
+
 ``` {r alluvial, echo = F, eval = F}
-forAlluv <- y2y %>% group_by(strat1, strat2) %>% dplyr::summarise(n = n())
+forAlluv <- y2y %>% group_by(strat1, strat2) %>% dplyr::summarise(n = n()) %>% filter(strat1 != strat2)
 
 #all = 105/478 = 22%
 #EM: 41/108=38%
@@ -326,17 +358,19 @@ forAlluv <- y2y %>% group_by(strat1, strat2) %>% dplyr::summarise(n = n())
 #LDM: 11/86=13%
 #SDM: 41/256=16%
 
-ggplot(forAlluv %>% filter(strat1 != strat2),
+ggplot(forAlluv,
        aes(y = n, axis1 = strat1, axis2 = strat2)) +
   geom_alluvium(aes(fill = strat1), width = 1/12) +
   geom_stratum(width = 1/12, fill = "black", color = "grey") +
   geom_label(stat = "stratum", 
-             aes(label = after_stat(stratum))) +
+             aes(label = after_stat(paste0(stratum, ": ", c(41, 6, 17, 41, 45, 6, 17, 33) ))), 
+             family = "Century Gothic") +
   theme_bw() + ylab("") + xlab("") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         axis.ticks = element_blank(), axis.text = element_blank(),
-        panel.border = element_blank()) + 
-  labs(fill = "Strategy") + ggtitle("Figure 4b.")
+        panel.border = element_blank(), text=element_text(family = "Century Gothic")) + 
+  labs(fill = "Strategy") +
+  scale_fill_manual(values = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a"))
 
 ```
 
@@ -522,7 +556,7 @@ meanDFP <- ggplot(newdata1) +
   geom_line(aes(x = meanDFP, y = pred), alpha = .8) +
   geom_ribbon(aes(x = meanDFP, y = pred, ymin = ll,ymax = ul), alpha = 0.2) +
   ylab("Probability of switching") + 
-  xlab("Mean days from peak green up during herd-level migratory period") + 
+  xlab("Mean DFP during herd-level migratory period") + 
   theme_bw() + theme(legend.title = element_blank()) +
   geom_rug(data = y2y %>% filter(strat1 == "R"), aes(meanDFP)) +
   scale_x_continuous(breaks = seq(0, 80, 10)) +
@@ -1246,7 +1280,7 @@ dev <- ggplot(newdata) +
   ylab("Probability of switching") + 
   xlab("Proportion of developed lands") + 
   theme_bw() + theme(legend.title = element_blank()) + 
-  geom_rug(data = forRug, aes(dev, color = season)) + xlim(0.000001, 0.05)
+  geom_rug(data = forRug, aes(dev, color = season)) + xlim(0.000001, 0.041)
 
 
 
@@ -1254,8 +1288,8 @@ dev <- ggplot(newdata) +
 grid <- expand.grid(seq(0, 0.041, by = 0.0001), seq(0, 0.033, by = 0.0001))
 
 
-newdata5 <- with(data = model14$trainingData, data.frame(springMigpropDev = grid$Var1,
-                                                         winter2propDev = grid$Var2))
+newdata5 <- with(data = model14$trainingData, data.frame(springMigpropDev = grid$Var2,
+                                                         winter2propDev = grid$Var1))
 
 newdata6 <- predict(preproc, newdata5)
 
