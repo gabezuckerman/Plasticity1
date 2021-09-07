@@ -363,7 +363,7 @@ ggplot(forAlluv,
   geom_alluvium(aes(fill = strat1), width = 1/12) +
   geom_stratum(width = 1/12, fill = "black", color = "grey") +
   geom_label(stat = "stratum", 
-             aes(label = after_stat(paste0(stratum, ": ", c(41, 6, 17, 41, 45, 6, 17, 33) ))), 
+             aes(label = after_stat(paste0(stratum, ": ", c(41, 6, 17, 41, 45, 6, 21, 33) ))), 
              family = "Century Gothic") +
   theme_bw() + ylab("") + xlab("") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -388,7 +388,7 @@ combos <- combn(vars, 2) %>% t() %>% as.data.table()
 #VIF threshold of 2, (Zuur, Ieno, & Elphick, 2010)
 
 
-#for positive
+#for positive==
 vifTest <- function(comboNum) {
   
   vifs <- vif(y2y %>% filter(strat1 == "LDM") %>% dplyr::select(combos[comboNum,] %>% as.character()))
@@ -526,9 +526,21 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 
 
 ```{r visualizing informative covs for residents, echo = F, eval = F}
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- as.factor(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- relevel(y2y$winter2feedAccess, "0")
+y2y <- y2y %>% mutate(switch = ifelse(switch == T, 1, 0))
+
+fitControl <- trainControl() 
+
+
+y2y$switch <- as.factor(y2y$switch)
 
 model5 <- train(switch ~ meanDFP,data = y2y %>% filter(strat1 == "R"), method = "glm",family = "binomial",
                 trControl = fitControl,preProcess = c('center', 'scale'))
+
+yardstick::mcc_vec(as.factor(model5$trainingData$.outcome), predict(model5, model5$trainingData))
+
 
 coef <- confint(model5$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
@@ -561,12 +573,16 @@ meanDFP <- ggplot(newdata1) +
   theme_bw() + theme(legend.title = element_blank()) +
   geom_rug(data = y2y %>% filter(strat1 == "R"), aes(meanDFP)) +
   scale_x_continuous(breaks = seq(0, 80, 10)) +
-  scale_y_continuous(breaks = seq(0, 1, .1))
+  scale_y_continuous(breaks = seq(0, 1, .1)) + ylim(0, 1)
+
 
 ##########################
 
 model6 <- train(switch ~ maxSnow,data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl,preProcess = c('center', 'scale'))
+
+mltools::mcc(predict(model6, model6$trainingData), model6$trainingData$.outcome)
+
 
 coef <- confint(model6$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
@@ -599,12 +615,16 @@ maxSnow <- ggplot(newdata1) +
   theme_bw() + theme(legend.title = element_blank()) +
   geom_rug(data = y2y %>% filter(strat1 == "R"), aes(maxSnow)) +
   scale_x_continuous(breaks = seq(0, 4, .5)) +
-  scale_y_continuous(breaks = seq(0, 1, .2))
+  scale_y_continuous(breaks = seq(0, 1, .2)) + ylim(0, 1)
+
 
 ##########################
 
 model7 <- train(switch ~ diversity,data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
+
+mltools::mcc(predict(model7, model7$trainingData), model7$trainingData$.outcome)
+
 
 coef <- confint(model7$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
@@ -635,7 +655,8 @@ diversity <- ggplot(newdata1) +
   ylab("Probability of switching") + 
   xlab("Herd-level diversity") + 
   theme_bw() + theme(legend.title = element_blank()) +
-  geom_rug(data = y2y %>% filter(strat1 == "R"), aes(diversity))
+  geom_rug(data = y2y %>% filter(strat1 == "R"), aes(diversity)) + ylim(0, 1)
+
 
 
 ggpubr::ggarrange(meanDFP, maxSnow, diversity, labels = c("A.", "B.", "C."))
@@ -765,10 +786,22 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 ```
 
 ```{r visualizing informative covs for EM, echo = F, eval = F}
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- as.factor(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- relevel(y2y$winter2feedAccess, "0")
+y2y <- y2y %>% mutate(switch = ifelse(switch == T, 1, 0))
+
+fitControl <- trainControl() 
+
+y2y$switch <- as.factor(y2y$switch)
+
 
 model18 <- train(switch ~ winter2propDev*diversity, data = y2y %>% filter(strat1 == "EM"),
                  method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
+
+yardstick::mcc_vec(as.factor(model18$trainingData$.outcome), predict(model18, model18$trainingData))
+
 
 coef <- confint(model18$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
@@ -802,7 +835,7 @@ dev <- ggplot(newdata1) +
   ylab("Probability of switching") + 
   xlab("Proportion of winter range in developed land") + 
   theme_bw() + theme(legend.title = element_blank()) +
-  geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(winter2propDev))
+  geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(winter2propDev)) + ylim(0, 1)
 
 
 #winterDev without feed
@@ -831,7 +864,7 @@ div <- ggplot(newdata3) +
   ylab("Probability of switching") + 
   xlab("Herd-level diversity") + 
   theme_bw() + theme(legend.title = element_blank()) +
-  geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(diversity))
+  geom_rug(data = y2y %>% filter(strat1 == "EM"), aes(diversity)) + ylim(0, 1)
 
 #interaction
 grid <- expand.grid(
@@ -1049,7 +1082,7 @@ interaction <- ggplot(newdata) +
   theme_bw() + labs(fill = "Fed", color = "Fed") + scale_x_continuous(breaks = seq(0, 1, by = .2)) +
   geom_rug(data = y2y %>% filter(strat1 == "SDM")%>% 
              mutate(winter2feedAccess = ifelse(winter2feedAccess == 1, T, F)),
-           aes(propCrop, color = winter2feedAccess)) 
+           aes(propCrop, color = winter2feedAccess)) + ylim(0, 1)
 
 coef <- confint(model, level = .85) %>% as.data.frame() %>% 
   mutate(estimate = as.numeric(coef(model)),
@@ -1070,10 +1103,11 @@ fitControl <- trainControl()
 # 
 # #139_1-2 has cropProp =1
 # #warning
-# model10 <- train(switch ~ propCrop*winter2feedAccess, data = y2y %>% filter(strat1 == "SDM"),
-#                  method = "glm",family = "binomial", 
-#                  trControl = fitControl, preProcess = c('center', 'scale'))
-# 
+model10 <- train(switch ~ propCrop*winter2feedAccess, data = y2y %>% filter(strat1 == "SDM"),
+                 method = "glm",family = "binomial",
+                 trControl = fitControl, preProcess = c('center', 'scale'))
+
+yardstick::mcc_vec(as.factor(model10$trainingData$.outcome), predict(model10, model10$trainingData))
 # 
 # coef <- confint(model10$finalModel, level = .85) %>% as.data.frame() %>% 
 #   mutate(estimate = as.numeric(coef(model10$finalModel)),
@@ -1144,6 +1178,9 @@ fitControl <- trainControl()
 model22 <- train(switch ~ springMigpropDev*diversity, data = y2y %>% filter(strat1 == "SDM"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
 
+yardstick::mcc_vec(as.factor(model22$trainingData$.outcome), predict(model22, model22$trainingData))
+
+
 coef <- confint(model22$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
@@ -1172,7 +1209,7 @@ div <- ggplot(newdata5) +
   ylab("Probability of switching") + 
   xlab("Herd-level diversity") + 
   theme_bw() + theme(legend.title = element_blank()) +
-  geom_rug(data = y2y %>% filter(strat1 == "SDM"), aes(diversity))
+  geom_rug(data = y2y %>% filter(strat1 == "SDM"), aes(diversity)) + ylim(0, 1)
 
 ggpubr::ggarrange(interaction, div, labels = c("A.", "B."))
 
@@ -1302,10 +1339,23 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 
 
 ```{r visualizing informative covs for LDM, echo = F, eval = F}
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- as.factor(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- relevel(y2y$winter2feedAccess, "0")
+y2y <- y2y %>% mutate(switch = ifelse(switch == T, 1, 0))
+
+fitControl <- trainControl() 
+
+
+y2y$switch <- as.factor(y2y$switch)
+
+
 #warning
 model14 <- train(switch ~ winter2propDev*springMigpropDev, data = y2y %>% filter(strat1 == "LDM"),
                  method = "glm",
                  family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'))
+
+yardstick::mcc_vec(model14$trainingData$.outcome, predict(model14, model14$trainingData))
 
 
 coef <- confint(model14$finalModel, level = .85) %>% as.data.frame() %>% 
@@ -1400,6 +1450,10 @@ interaction <- ggplot(newdata5) +
   geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(winter2propDev), sides = "b") +
   #this one not showing up
   geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(y = springMigpropDev), sides = "l")
+
+
+
+
 
 ggpubr::ggarrange(dev, interaction, labels = c("A.", "B."))
 
