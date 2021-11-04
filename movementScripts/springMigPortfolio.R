@@ -1,10 +1,10 @@
-library(data.table)
 library(tidyverse)
 library(lubridate)
 library(Hmisc)
 library(sf)
 library(BBMM)
 library(raster)
+library(data.table)
 library(tripack)
 
 setwd("C:/Users/MiddletonLab/Desktop/Gabe/Box Sync/Elk/Switching3")

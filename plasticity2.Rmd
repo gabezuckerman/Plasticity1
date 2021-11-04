@@ -526,6 +526,8 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 
 
 ```{r visualizing informative covs for residents, echo = F, eval = F}
+#dont run above code before running this
+
 y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
 y2y$winter2feedAccess <- as.factor(y2y$winter2feedAccess)
 y2y$winter2feedAccess <- relevel(y2y$winter2feedAccess, "0")
@@ -538,6 +540,9 @@ y2y$switch <- as.factor(y2y$switch)
 
 model5 <- train(switch ~ meanDFP,data = y2y %>% filter(strat1 == "R"), method = "glm",family = "binomial",
                 trControl = fitControl,preProcess = c('center', 'scale'))
+
+#examining residuals: non-significant residual pattern , basically normal
+testDispersion(model5$finalModel)
 
 yardstick::mcc_vec(as.factor(model5$trainingData$.outcome), predict(model5, model5$trainingData))
 
@@ -581,6 +586,9 @@ meanDFP <- ggplot(newdata1) +
 model6 <- train(switch ~ maxSnow,data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl,preProcess = c('center', 'scale'))
 
+#examining residuals: non-significant residual pattern, fairly normal
+testDispersion(model6$finalModel)
+
 mltools::mcc(predict(model6, model6$trainingData), model6$trainingData$.outcome)
 
 
@@ -622,6 +630,9 @@ maxSnow <- ggplot(newdata1) +
 
 model7 <- train(switch ~ diversity,data = y2y %>% filter(strat1 == "R"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
+
+#examining residuals: non-significant residual pattern, basically normal
+testDispersion(model7$finalModel)
 
 mltools::mcc(predict(model7, model7$trainingData), model7$trainingData$.outcome)
 
@@ -799,6 +810,9 @@ y2y$switch <- as.factor(y2y$switch)
 model18 <- train(switch ~ winter2propDev*diversity, data = y2y %>% filter(strat1 == "EM"),
                  method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
+
+#examining residuals: non-significant residual pattern, basically normal
+testDispersion(model18$finalModel)
 
 yardstick::mcc_vec(as.factor(model18$trainingData$.outcome), predict(model18, model18$trainingData))
 
@@ -1039,6 +1053,9 @@ d1 <- y2y %>% filter(strat1 == "SDM") %>% dplyr::select(switch, propCrop, winter
 
 model <- glm(switch ~ propCrop*winter2feedAccess, data = d1, family = binomial)
 
+#examining residuals: non-significant residual pattern, basically normal
+testDispersion(model)
+
 #propCrop with feed, all 4 switches by fed elk all had 0 propCrop in winter
 newdata1 <- with(data = d1, data.frame(propCrop = seq(0, 1, by = 0.01),
                                                         winter2feedAccess = as.factor(1)))
@@ -1106,6 +1123,9 @@ fitControl <- trainControl()
 model10 <- train(switch ~ propCrop*winter2feedAccess, data = y2y %>% filter(strat1 == "SDM"),
                  method = "glm",family = "binomial",
                  trControl = fitControl, preProcess = c('center', 'scale'))
+
+#examining residuals: non-significant residual pattern, basically normal
+testDispersion(model10$finalModel)
 
 yardstick::mcc_vec(as.factor(model10$trainingData$.outcome), predict(model10, model10$trainingData))
 # 
@@ -1177,6 +1197,9 @@ yardstick::mcc_vec(as.factor(model10$trainingData$.outcome), predict(model10, mo
 #diversity from model22, but not on its own?
 model22 <- train(switch ~ springMigpropDev*diversity, data = y2y %>% filter(strat1 == "SDM"),method = "glm",family = "binomial",
                         trControl = fitControl, preProcess = c('center', 'scale'))
+
+#examining residuals: non-significant residual pattern, basically normal
+testDispersion(model22$finalModel)
 
 yardstick::mcc_vec(as.factor(model22$trainingData$.outcome), predict(model22, model22$trainingData))
 
@@ -1354,6 +1377,9 @@ y2y$switch <- as.factor(y2y$switch)
 model14 <- train(switch ~ winter2propDev*springMigpropDev, data = y2y %>% filter(strat1 == "LDM"),
                  method = "glm",
                  family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'))
+
+#examining residuals: non-significant residual pattern, basically normal
+testDispersion(model14$finalModel)
 
 yardstick::mcc_vec(model14$trainingData$.outcome, predict(model14, model14$trainingData))
 
