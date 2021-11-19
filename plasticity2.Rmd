@@ -370,7 +370,21 @@ ggplot(forAlluv,
         axis.ticks = element_blank(), axis.text = element_blank(),
         panel.border = element_blank(), text=element_text(family = "Century Gothic")) + 
   labs(fill = "Strategy") +
-  scale_fill_manual(values = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a"))
+  scale_fill_manual(values = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a")) +
+  geom_text(x = 1.1, y = 3, label = "4", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 10, label = "10", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 27, label = "27", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 43, label = "5", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 47, label = "1", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 52, label = "10", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 57.5, label = "1", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 62, label = "6", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 78, label = "30", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 94, label = "1", family = "Century Gothic") +
+  geom_text(x = 1.1, y = 100, label = "10", family = "Century Gothic")
+
+
+
 
 ```
 
