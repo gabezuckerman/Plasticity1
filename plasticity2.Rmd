@@ -23,6 +23,8 @@ library(caret)
 library(lubridate)
 library(Hmisc)
 library(vegan)
+library(DHARMa)
+library(MuMIn)
 
 
 
@@ -1242,7 +1244,7 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 ```
 
 
-```{r visualizing informative covs for LDM, echo = F, eval = F}
+```{r visualizing informative covs for LDM model 28, echo = F, eval = F}
 y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
 y2y$winter2feedAccess <- as.factor(y2y$winter2feedAccess)
 y2y$winter2feedAccess <- relevel(y2y$winter2feedAccess, "0")
@@ -1254,122 +1256,216 @@ fitControl <- trainControl()
 y2y$switch <- as.factor(y2y$switch)
 
 
-#warning
-model14 <- train(switch ~ winter2propDev*springMigpropDev, data = y2y %>% filter(strat1 == "LDM"),
-                 method = "glm",
-                 family = "binomial", trControl = fitControl, preProcess = c('center', 'scale'))
+model28 <- train(switch ~ maxSnow*diversity, data = y2y %>% filter(strat1 == "LDM"),method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
 
 #log-likelihood
-logLik(model14$finalModel)
+logLik(model28$finalModel)
 
 
 #examining residuals: non-significant residual pattern, basically normal
-testDispersion(model14$finalModel)
+testDispersion(model28$finalModel)
 
-yardstick::mcc_vec(model14$trainingData$.outcome, predict(model14, model14$trainingData))
+yardstick::mcc_vec(model28$trainingData$.outcome, predict(model28, model28$trainingData))
 
 
-coef <- confint(model14$finalModel, level = .85) %>% as.data.frame() %>% 
+coef <- confint(model28$finalModel, level = .85) %>% as.data.frame() %>% 
   mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
 
-preproc <- preProcess(y2y %>% filter(strat1 == "LDM") %>% dplyr::select(winter2propDev, springMigpropDev),
+preproc <- preProcess(y2y %>% filter(strat1 == "LDM") %>% dplyr::select(maxSnow, diversity),
                       method = c("center", "scale"))
 
 #winter2propDev
-newdata1 <- with(data = model14$trainingData, data.frame(winter2propDev = seq(0, 0.041, by = 0.0001),
-                                                         springMigpropDev = 0))
+newdata1 <- with(data = model14$trainingData, data.frame(maxSnow = seq(0, 1.94, by = 0.01),
+                                                         diversity = 0))
 
 newdata2 <- predict(preproc, newdata1)
 
-newdata2$springMigpropDev <- 0
-newdata2$`winter2propDev:springMigpropDev` <- 0
+newdata2$diversity <- 0
+newdata2$`maxSnow:diversity` <- 0
 
 
-p <- predict(model14$finalModel, newdata = newdata2,
+p <- predict(model28$finalModel, newdata = newdata2,
              interval="confidence",se.fit = T, level = 0.85, type = "response")
 
 newdata1$pred <- p$fit
 newdata1$ll <- p$fit - 1.44 * p$se.fit
 newdata1$ul <- p$fit + 1.44 * p$se.fit
-newdata1$season <- "W.R."
 
-#springMigpropDev
-newdata3 <- with(data = model14$trainingData, data.frame(springMigpropDev = seq(0, 0.033, by = 0.0001),
-                                                         winter2propDev = 0))
+newdata1 <- newdata1 %>% mutate(ll = ifelse(ll<0, 0, ll), ul = ifelse(ul>1, 1, ul))
+
+snow28 <- ggplot(newdata1) + 
+  geom_line(aes(x = maxSnow, y = pred), alpha = .8) +
+  geom_ribbon(aes(x = maxSnow, y = pred, ymin = ll,ymax = ul), alpha = 0.2) +
+  ylab("Probability of switching") + 
+  xlab("Maximum snow depth in winter range (m.)") + 
+  theme_bw() + theme(legend.title = element_blank()) +
+  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(maxSnow)) + ylim(0, 1)
+
+
+#diversity
+newdata3 <- with(data = model28$trainingData, data.frame(diversity = seq(0, 1.33, by = 0.01),
+                                                         maxSnow = 0))
 
 newdata4 <- predict(preproc, newdata3)
 
-newdata4$winter2propDev <- 0
-newdata4$`winter2propDev:springMigpropDev` <- 0
+newdata4$maxSnow <- 0
+newdata4$`maxSnow:diversity` <- 0
 
-p <- predict(model14$finalModel, newdata = newdata4,
+p <- predict(model28$finalModel, newdata = newdata4,
              interval="confidence",se.fit = T, level = 0.85, type = "response")
 
 newdata3$pred <- p$fit
 newdata3$ll <- p$fit - 1.44 * p$se.fit
 newdata3$ul <- p$fit + 1.44 * p$se.fit
-newdata3$season <- "Sp. mig."
 
+newdata3 <- newdata3 %>% mutate(ll = ifelse(ll<0, 0, ll), ul = ifelse(ul>1, 1, ul))
 
-
-newdata <- rbindlist(list(newdata1, newdata3), fill = T) %>%
-  mutate(ll = ifelse(ll < 0, 0, ll), ul = ifelse(ul > 1, 1, ul), pred = ifelse(pred > 1, 1, pred))
-
-forRug <- y2y %>% filter(strat1 == "LDM") %>% dplyr::select(dev = springMigpropDev) %>% mutate(season = "Sp. mig.") %>%
-  rbind(
-    y2y %>% filter(strat1 == "LDM") %>% dplyr::select(dev = winter2propDev) %>% mutate(season = "W.R.")
-  )
-
-
-#weird spike at 1
-dev <- ggplot(newdata) + 
-  geom_line(aes(x = winter2propDev, y = pred, color = season), alpha = .8) +
-  geom_ribbon(aes(x = winter2propDev, y = pred, ymin = ll, ymax = ul, fill = season), alpha = 0.2) +
-  geom_line(aes(x = springMigpropDev, y = pred, color = season), alpha = .8) +
-  geom_ribbon(aes(x = springMigpropDev, y = pred, ymin = ll,ymax = ul, fill = season), alpha = 0.2) +
+diversity28 <- ggplot(newdata3) + 
+  geom_line(aes(x = diversity, y = pred), alpha = .8) +
+  geom_ribbon(aes(x = diversity, y = pred, ymin = ll,ymax = ul), alpha = 0.2) +
   ylab("Probability of switching") + 
-  xlab("Proportion of developed lands") + 
-  theme_bw() + theme(legend.title = element_blank()) + 
-  geom_rug(data = forRug, aes(dev, color = season)) + xlim(0.000001, 0.041)
+  xlab("Herd-level movement tactic diversity") + 
+  theme_bw() + theme(legend.title = element_blank()) +
+  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(diversity)) + ylim(0, 1)
 
 
 
-#springMigpropDev:winter2propDev
-grid <- expand.grid(seq(0, 0.041, by = 0.0001), seq(0, 0.033, by = 0.0001))
 
 
-newdata5 <- with(data = model14$trainingData, data.frame(springMigpropDev = grid$Var2,
-                                                         winter2propDev = grid$Var1))
+#maxSnow:diversity
+grid <- expand.grid(seq(0, 1.33, by = 0.01), seq(0, 1.94, by = 0.01))
+
+
+newdata5 <- with(data = model28$trainingData, data.frame(diversity = grid$Var1,
+                                                         maxSnow = grid$Var2))
 
 newdata6 <- predict(preproc, newdata5)
 
-newdata6$`winter2propDev:springMigpropDev` <- newdata6$winter2propDev*newdata6$springMigpropDev
+newdata6$`maxSnow:diversity` <- newdata6$maxSnow*newdata6$diversity
 
-p <- predict(model14$finalModel, newdata = newdata6,
+p <- predict(model28$finalModel, newdata = newdata6,
              interval="confidence",se.fit = T, level = 0.85, type = "response")
 
 newdata5$pred <- p$fit
 newdata5$ll <- p$fit - 1.44 * p$se.fit
 newdata5$ul <- p$fit + 1.44 * p$se.fit
 
+newdata5 <- newdata5 %>% mutate(ll = ifelse(ll<0, 0, ll), ul = ifelse(ul>1, 1, ul))
 
+#more likely to switch at intermediately high snow depths with increased herd-level diversity!!
 interaction <- ggplot(newdata5) + 
-  geom_tile(aes(x = winter2propDev, y = springMigpropDev, fill = pred)) +
-  theme_bw() + xlab("Proportion of winter range in developed land") +
-  ylab("Proportion of spring migratory period in developed land") +
+  geom_tile(aes(x = maxSnow, y = diversity, fill = pred)) +
+  theme_bw() + xlab("Maximum snow depth in winter range (m.)") +
+  ylab("Herd-level movement tactic diversity") +
   scale_fill_viridis_c(option = "B", direction = -1, name = "P(switch)", breaks = seq(.1, 1, by = .2)) +
-  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(winter2propDev), sides = "b") +
-  #this one not showing up
-  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(y = springMigpropDev), sides = "l")
+  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(maxSnow), sides = "b") +
+  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(y = diversity), sides = "l")
 
 
 
 
 
-ggpubr::ggarrange(dev, interaction, labels = c("A.", "B."))
+ggpubr::ggarrange(snow28, diversity28, interaction, labels = c("A.", "B.", "C."))
 
 
 ```
 
+```{r visualizing informative covs for LDM model 21, echo = F, eval = F}
+y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- as.factor(y2y$winter2feedAccess)
+y2y$winter2feedAccess <- relevel(y2y$winter2feedAccess, "0")
+y2y <- y2y %>% mutate(switch = ifelse(switch == T, 1, 0))
 
+fitControl <- trainControl() 
+
+
+y2y$switch <- as.factor(y2y$switch)
+
+#warning
+model21 <- train(switch ~ springMigpropDev+maxSnow, data = y2y %>% filter(strat1 == "LDM"),method = "glm",family = "binomial",
+                        trControl = fitControl, preProcess = c('center', 'scale'))
+
+#log-likelihood
+logLik(model21$finalModel)
+
+
+#examining residuals: non-significant residual pattern, basically normal
+testDispersion(model21$finalModel)
+
+yardstick::mcc_vec(model21$trainingData$.outcome, predict(model28, model28$trainingData))
+
+
+coef <- confint(model21$finalModel, level = .85) %>% as.data.frame() %>% 
+  mutate(sig = ifelse((`7.5 %` < 0 & `92.5 %` < 0) | (`7.5 %` > 0 & `92.5 %` > 0), T, F))
+
+preproc <- preProcess(y2y %>% filter(strat1 == "LDM") %>% dplyr::select(maxSnow, springMigpropDev),
+                      method = c("center", "scale"))
+
+#max snow
+newdata1 <- with(data = model21$trainingData, data.frame(maxSnow = seq(0, 1.94, by = 0.01),
+                                                         springMigpropDev = 0))
+
+newdata2 <- predict(preproc, newdata1)
+
+newdata2$springMigpropDev <- 0
+
+
+p <- predict(model21$finalModel, newdata = newdata2,
+             interval="confidence",se.fit = T, level = 0.85, type = "response")
+
+newdata1$pred <- p$fit
+newdata1$ll <- p$fit - 1.44 * p$se.fit
+newdata1$ul <- p$fit + 1.44 * p$se.fit
+
+newdata1 <- newdata1 %>% mutate(ll = ifelse(ll<0, 0, ll), ul = ifelse(ul>1, 1, ul))
+
+snow21 <- ggplot(newdata1) + 
+  geom_line(aes(x = maxSnow, y = pred), alpha = .8) +
+  geom_ribbon(aes(x = maxSnow, y = pred, ymin = ll,ymax = ul), alpha = 0.2) +
+  ylab("Probability of switching") + 
+  xlab("Maximum snow depth in winter range (m.)") + 
+  theme_bw() + theme(legend.title = element_blank()) +
+  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(maxSnow)) + ylim(0, 1)
+
+
+#spring dev
+newdata3 <- with(data = model21$trainingData, data.frame(springMigpropDev = seq(0, 0.033, by = 0.0001),
+                                                         maxSnow = 0))
+
+newdata4 <- predict(preproc, newdata3)
+
+newdata4$maxSnow <- 0
+
+p <- predict(model21$finalModel, newdata = newdata4,
+             interval="confidence",se.fit = T, level = 0.85, type = "response")
+
+newdata3$pred <- p$fit
+newdata3$ll <- p$fit - 1.44 * p$se.fit
+newdata3$ul <- p$fit + 1.44 * p$se.fit
+
+newdata3 <- newdata3 %>% mutate(ll = ifelse(ll<0, 0, ll), ul = ifelse(ul>1, 1, ul))
+
+springMigpropDev21 <- ggplot(newdata3) + 
+  geom_line(aes(x = springMigpropDev, y = pred), alpha = .8) +
+  geom_ribbon(aes(x = springMigpropDev, y = pred, ymin = ll,ymax = ul), alpha = 0.2) +
+  ylab("Probability of switching") + 
+  xlab("Proportion of developed land on spring migratory route") + 
+  theme_bw() + theme(legend.title = element_blank()) +
+  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(springMigpropDev)) + ylim(0, 1)
+
+ggpubr::ggarrange(snow21, springMigpropDev21,labels = c("A.", "B."))
+
+
+```
+
+```{r visualizing informative covs for LDM model 23, echo = F, eval = F}
+
+```
+
+
+```{r visualizing informative covs for LDM model 20, echo = F, eval = F}
+
+
+```
 
