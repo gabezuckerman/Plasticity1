@@ -1,0 +1,2 @@
+"(Intercept)" "`springMigpropDev:diversity`" "diversity" "springMigpropDev" "df" "logLik" "AICc" "delta" "weight"
+"model22$finalModel" -3.30998332749296 -3.47792406233065 0.877917472345164 -0.73017079545064 4 -92.4505146574027 193.060391864606 0 1

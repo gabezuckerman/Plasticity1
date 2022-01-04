@@ -73,6 +73,8 @@ ggplot(allIndYears) + geom_point(aes(dists, absElev), alpha = .5) + ylab("Abosul
 ```
 
 
+
+
 ```{r classify, echo=FALSE}
 #change figures to only include elk in final dataset
 
@@ -108,6 +110,7 @@ ggplot(allIndYears) + geom_point(aes(dists, absElev, color = class), alpha = .3)
 
 
 ```
+
 
 ```{r first day DNHM, echo = F, eval = F}
 library(plotly)
@@ -818,6 +821,13 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 
 ```
 
+```{r model selection table for EM, echo = F, eval = F}
+write.table(model.sel(model18$finalModel, model2$finalModel, model3$finalModel, model4$finalModel,
+                        model5$finalModel, null),
+            "emModSel.txt")
+
+```
+
 ```{r visualizing informative covs for EM, echo = F, eval = F}
 y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
 y2y$winter2feedAccess <- as.factor(y2y$winter2feedAccess)
@@ -907,17 +917,18 @@ maxDiv$group <- "high"
 newdata1 <- rbindlist(list(newdata1, minDiv, maxDiv)) %>%
   mutate(ll = ifelse(ll<0, 0, ll), ul = ifelse(ul>1, 1, ul))
 
+newdata1$group <- factor(newdata1$group, levels = c("low", "avg.", "high"), labels = c("Low", "Average", "High"))
 
-
-ggplot(newdata1 %>% rename(`Diversity level` = group)) + 
-  geom_line(aes(x = winter2propDev, y = pred, color = `Diversity level`), alpha = .8) +
-  geom_ribbon(aes(x = winter2propDev, y = pred, ymin = ll,ymax = ul, fill = `Diversity level`), alpha = 0.2) +
+ggplot(newdata1 %>% rename(`Herd-level diversity` = group)) + 
+  geom_line(aes(x = winter2propDev, y = pred, color = `Herd-level diversity`), alpha = .8) +
+  geom_ribbon(aes(x = winter2propDev, y = pred, ymin = ll,ymax = ul, fill = `Herd-level diversity`), alpha = 0.2) +
   ylab("Probability of switching") + 
   xlab("Proportion of developed land in winter range") + 
   theme_bw() +  ylim(0, 1) + 
   scale_fill_brewer(palette = "Dark2") +
-  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(winter2propDev, color = switch)) +
-  scale_color_manual(values = c("#A8A8A8", "#000000", "#1b9e77", "#d95f02", "#7570b3"), guide = F)
+  geom_rug(data = y2y %>% filter(strat1 == "LDM", switch == 1), aes(winter2propDev), sides = "t") +
+  geom_rug(data = y2y %>% filter(strat1 == "LDM", switch == 0), aes(winter2propDev), sides = "b") +
+  scale_color_manual(values = c("#1b9e77", "#d95f02", "#7570b3"), guide = F)
 
 
 
@@ -1125,6 +1136,12 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 
 ```
 
+```{r model selection table for SDM, echo = F, eval = F}
+write.table(model.sel(model22$finalModel),
+            "sdmModSel.txt")
+
+```
+
 
 ```{r visualizing informative covs for SDM, echo = F, eval = F}
 y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
@@ -1306,6 +1323,13 @@ AICcmodavg::aictab(list(model1$finalModel, model2$finalModel, model3$finalModel,
 ```
 
 
+
+```{r model selection table for LDM, echo = F, eval = F}
+write.table(model.sel(model28$finalModel, model21$finalModel, model3$finalModel, model20$finalModel, null),
+            "ldmModSel.txt")
+
+```
+
 ```{r visualizing informative covs for LDM model 28, echo = F, eval = F}
 y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
 y2y$winter2feedAccess <- as.factor(y2y$winter2feedAccess)
@@ -1396,17 +1420,18 @@ maxDiv$group <- "high"
 newdata1 <- rbindlist(list(newdata1, minDiv, maxDiv)) %>%
   mutate(ll = ifelse(ll<0, 0, ll), ul = ifelse(ul>1, 1, ul))
 
+newdata1$group <- factor(newdata1$group, levels = c("low", "avg.", "high"), labels = c("Low", "Average", "High"))
 
-
-ggplot(newdata1 %>% rename(`Diversity level` = group)) + 
-  geom_line(aes(x = maxSnow, y = pred, color = `Diversity level`), alpha = .8) +
-  geom_ribbon(aes(x = maxSnow, y = pred, ymin = ll,ymax = ul, fill = `Diversity level`), alpha = 0.2) +
+ggplot(newdata1 %>% rename(`Herd-level diversity` = group)) + 
+  geom_line(aes(x = maxSnow, y = pred, color = `Herd-level diversity`), alpha = .8) +
+  geom_ribbon(aes(x = maxSnow, y = pred, ymin = ll,ymax = ul, fill = `Herd-level diversity`), alpha = 0.2) +
   ylab("Probability of switching") + 
   xlab("Maximum snow depth in winter range (m.)") + 
   theme_bw() +  ylim(0, 1) + scale_colour_brewer(palette = "Dark2") +
   scale_fill_brewer(palette = "Dark2") +
-  geom_rug(data = y2y %>% filter(strat1 == "LDM"), aes(maxSnow, color = switch)) +
-  scale_color_manual(values = c("#A8A8A8", "#000000", "#1b9e77", "#d95f02", "#7570b3"), guide = F)
+  geom_rug(data = y2y %>% filter(strat1 == "LDM", switch == 1), aes(maxSnow), sides = "t") +
+  geom_rug(data = y2y %>% filter(strat1 == "LDM", switch == 0), aes(maxSnow), sides = "b") +
+  scale_color_manual(values = c("#1b9e77", "#d95f02", "#7570b3"), guide = F)
 
 
 #diversity
@@ -1691,3 +1716,37 @@ ggplot(newdata3) +
 
 ```
 
+```{r k-means supp info 1, echo=FALSE}
+
+forCluster <- nonRes %>% filter(elk %in% y2y$elk) %>%
+  dplyr::select(dists, absElev) %>% mutate(dists = scale(dists, center = T),
+                                                  absElev = scale(absElev, center = T))
+
+#turn into linked plots
+getClusterStats <- function(numCenters) {
+  k <- kmeans(forCluster, centers = numCenters, nstart = 25)
+
+  return(data.table(num = numCenters, within = k$tot.withinss, between = k$betweenss))
+}
+
+clusterStats <- map_dfr(1:10, getClusterStats)
+
+
+
+ ggplot(clusterStats) + geom_point(aes(num, within), color = "blue") + 
+   geom_line(aes(num, within), color = "blue") + 
+  xlab("Number of clusters (k)") + ylab("Total within group sum of squares") +
+  scale_x_continuous(breaks = 1:10) + geom_vline(aes(xintercept = 2.225), linetype = "dashed") +
+  geom_point(aes(num, between), color = "red") + geom_line(aes(num, between), color = "red") +
+   scale_y_continuous(name = "Total within group sum of squares", 
+                      sec.axis = sec_axis(~., name="Total between group sum of squares")) +
+   theme(axis.title.y.right = element_text(color = "red"),
+         axis.title.y = element_text(color = "blue"))
+ 
+k2 <- kmeans(forCluster, centers = 2, nstart = 25)
+k3 <- kmeans(forCluster, centers = 3, nstart = 25)
+
+fviz_cluster(k2, forCluster)
+fviz_cluster(k3, forCluster)
+
+```
