@@ -424,6 +424,20 @@ map_dfr(1:21, vifTest)
 ```
 
 
+```{r finding dist of tactics in each herd, eval = F, echo = F}
+allYears <- rbind(y2y %>% dplyr::select(elk, year = year1, tactic = strat1, herd), 
+                  y2y %>% dplyr::select(elk, year = year2, tactic = strat2, herd))
+
+allYears <- allYears %>% distinct(elk, year, .keep_all= T)
+
+tacticDist <- allYears %>% group_by(herd, tactic) %>% dplyr::summarise(count = n())
+numberTactics <- tacticDist %>% group_by(herd) %>% dplyr::summarise(count = n()) %>% arrange(herd)
+herdCounts <- allYears %>% group_by(herd) %>% dplyr::summarise(count = n()) %>% arrange(herd)
+
+ggplot(tacticDist) + geom_bar(aes(fill = tactic, y = count, x = herd), position = "dodge", stat = "identity")
+
+```
+
 
 ```{r model glm AIC just resident, echo = F, eval = F}
 #only six switches, so not enough to fit models
