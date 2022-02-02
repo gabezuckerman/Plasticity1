@@ -28,12 +28,13 @@ library(MuMIn)
 
 
 
-setwd("C:/Users/MiddletonLab/Desktop/Gabe/Box Sync/Elk/Plasticity1/")
+#setwd("C:/Users/MiddletonLab/Desktop/Gabe/Box Sync/Elk/Plasticity1/")
+setwd("~/Documents/GitHub/Plasticity1")
 
 
 distances <- fread("movementData/distanceChanges.csv")
 
-timing <- fread("../Switching3/timingData/finalTiming.csv", na.strings = "")
+timing <- fread("Switching3/timingData/finalTiming.csv", na.strings = "")
 
 ```
 
@@ -205,7 +206,7 @@ y2y <- y2y %>% mutate(elevDiff = sp2elev - sp1elev, distanceDiff = sp2dist - sp1
                vecDiff =sqrt(elevDiff^2 + distanceDiff^2))
 
 #adding herd and year
-gps <- fread("../Switching3/movementData/multiburstsNC.csv") %>% distinct(elkYear, startDateYear, herd)
+gps <- fread("Switching3/movementData/multiburstsNC.csv") %>% distinct(elkYear, startDateYear, herd)
 
 y2y$elkYear <- paste(y2y$id, y2y$year1, sep = "_")
 
@@ -228,13 +229,13 @@ fwrite(y2y, "movementData/updatedSwitchTable.csv")
 y2y <- y2y %>% filter(herd != "Sand Creek")
 
 #winter range 2 crop prop
-crop <- fread("../Switching3/covariates/crop/cropProp.csv") %>% filter(p == "winter2") %>%
+crop <- fread("Switching3/covariates/crop/cropProp.csv") %>% filter(p == "winter2") %>%
   rename(switchID = id) %>% dplyr::select(-p, -year)
 
 y2y <- y2y %>% merge(crop)
 
 #winter range 2 and migratory period dev prop
-dev <- fread("../Switching3/covariates/development/devProp.csv")
+dev <- fread("Switching3/covariates/development/devProp.csv")
 
 winter2dev <- dev %>% filter(p == "winter2") %>% dplyr::select(-year, -p) %>%
   rename(switchID = id)
@@ -247,7 +248,7 @@ colnames(springMigDev)[2] <- paste0("springMig", colnames(springMigDev)[2])
 y2y <- y2y %>% merge(winter2dev) %>% merge(springMigDev)
 
 #feed ground
-feed <- fread("../Switching3/covariates/feed/feedAccess.csv")
+feed <- fread("Switching3/covariates/feed/feedAccess.csv")
 
 winter2feed <- feed %>% filter(p == "winter2") %>% dplyr::select(-numFeedgrounds, -p) %>%
   rename(switchID = id)
@@ -256,7 +257,7 @@ colnames(winter2feed)[2] <- paste0("winter2", colnames(winter2feed)[2])
 y2y <- y2y %>% merge(winter2feed)
 
 #spring green up
-greenUp <- fread("../Switching3/covariates/greenUp/irg.csv")
+greenUp <- fread("Switching3/covariates/greenUp/irg.csv")
 
 springMigGreenUp <- greenUp %>% filter(period == "springMig") %>%
   dplyr::select(switchID, meanDFP, -period)
@@ -265,7 +266,7 @@ y2y <- y2y %>% merge(springMigGreenUp)
 
 #max snow depth
 
-snow <- fread("../Switching3/covariates/snow/snodasExtraction.csv") %>% group_by(switchID, period) %>%
+snow <- fread("Switching3/covariates/snow/snodasExtraction.csv") %>% group_by(switchID, period) %>%
   dplyr::summarise(meanSnow = mean(Snow_Depth_mean, na.rm = T),
                    varSnow = var(Snow_Depth_mean, na.rm = T),
                    maxSnow = max(Snow_Depth_mean, na.rm = T)) %>%
@@ -425,12 +426,24 @@ map_dfr(1:21, vifTest)
 
 
 ```{r finding dist of tactics in each herd, eval = F, echo = F}
+
+###This is where I can address arthurs comments
+
 allYears <- rbind(y2y %>% dplyr::select(elk, year = year1, tactic = strat1, herd), 
                   y2y %>% dplyr::select(elk, year = year2, tactic = strat2, herd))
 
 allYears <- allYears %>% distinct(elk, year, .keep_all= T)
 
 tacticDist <- allYears %>% group_by(herd, tactic) %>% dplyr::summarise(count = n())
+##key
+herdTactDistSuppTable <- tacticDist %>% spread(tactic, count) %>% merge(
+  tacticDist %>% group_by(herd) %>% summarise(total = sum(count))
+)
+
+write.table(herdTactDistSuppTable, file = "herdTactDistSuppTable.txt", sep = ",", quote = FALSE, row.names = F)
+
+
+
 numberTactics <- tacticDist %>% group_by(herd) %>% dplyr::summarise(count = n()) %>% arrange(herd)
 herdCounts <- allYears %>% group_by(herd) %>% dplyr::summarise(count = n()) %>% arrange(herd)
 
