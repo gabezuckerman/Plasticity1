@@ -31,7 +31,7 @@ library(MuMIn)
 #setwd("C:/Users/MiddletonLab/Desktop/Gabe/Box Sync/Elk/Plasticity1/")
 setwd("~/Documents/GitHub/Plasticity1")
 
-
+#where was this calculated?
 distances <- fread("movementData/distanceChanges.csv")
 
 timing <- fread("Switching3/timingData/finalTiming.csv", na.strings = "")
@@ -73,7 +73,7 @@ ggplot(allIndYears) + geom_point(aes(dists, absElev), alpha = .5) + ylab("Abosul
 
 ```
 
-
+Classifying each year into tactics
 
 
 ```{r classify, echo=FALSE}
@@ -96,11 +96,11 @@ nonRes <- allIndYears %>% filter(is.na(class)) %>% mutate(class = k$cluster) %>%
 allIndYears <- rbind(allIndYears %>% filter(class == "R"), nonRes)
 
 library(extrafont)
-loadfonts(device = "win")
-
+font_import()
+loadfonts()
 ggplot(allIndYears) + geom_point(aes(dists, absElev, color = class), alpha = .3) +
   ylab("Abosulte elevation change (m)") +   xlab("Geographic distance (m)") + 
-  geom_text(x=25000, y=1100, label="Elev. M (21.9%)", color = "#1b9e77", size = 9, family = "Century Gothic") +
+  geom_text(x=25000, y=1100, label="EM (21.9%)", color = "#1b9e77", size = 9, family = "Century Gothic") +
   geom_text(x=25000, y=400, label="SDM (53.7%)", color = "#e7298a", size = 9, family = "Century Gothic") +
   geom_text(x = 75000, y = 1000, label = "LDM (19.6%)", color = "#d95f02", size = 9, family = "Century Gothic") + 
   geom_text(x = 18000, y = 0, label = "R (4.8%)", color = "#7570b3", size = 9, family = "Century Gothic") +
@@ -112,6 +112,7 @@ ggplot(allIndYears) + geom_point(aes(dists, absElev, color = class), alpha = .3)
 
 ```
 
+animitation to show transition from dichotomy to full tactics, not used in report
 
 ```{r first day DNHM, echo = F, eval = F}
 library(plotly)
@@ -159,7 +160,7 @@ ggplotly(a) %>%  animation_opts(frame = 1500, transition = 1500, redraw = FALSE)
                       "<b>Elevational migrants", "<b>Short distance \n migrants")),
            frame = c(c(1, 1), c(2, 2, 2, 2)),
            showlegend = FALSE,
-           textfont = list(family = "century gothic", size = 20,
+           textfont = list(family = "Century Gothic", size = 20,
                            color = c("black", "black", "#7570b3", 
                                      "#e7298a", "#d95f02", "#1b9e77")))
 
@@ -167,7 +168,7 @@ ggplotly(a) %>%  animation_opts(frame = 1500, transition = 1500, redraw = FALSE)
 ```
 
 
-Multiyear movements
+Multiyear movements, identifying switches
 ```{r repair distance, echo=FALSE}
 getY2Y <- function(id){
   t <- allIndYears %>% arrange(years) %>% filter(elk == id) %>%
@@ -224,7 +225,9 @@ fwrite(y2y, "movementData/updatedSwitchTable.csv")
 
 
 ```{r covariates, echo = F}
-#removed sand creek
+#removed sand creek, no longer in scope
+
+y2y <- fread("movementData/updatedSwitchTable.csv")
 
 y2y <- y2y %>% filter(herd != "Sand Creek")
 
@@ -296,8 +299,9 @@ y2y <- y2y %>% merge(hd, by = "herd") %>% dplyr::select(switchID, elk, herd, eve
 
 ```
 
+looking into balance between tactics
+
 ``` {r basic movement tactic results, echo = F, eval = F}
-#do I want to redo classifcation with only used individuals? 7 elk years off
 y2yResults <- y2y %>% mutate(elkYear1 = paste(elk, year1, sep = "_"), elkYear2 = paste(elk, year2, sep = "_"))
 
 usedIndYears <- allIndYears %>% filter(elkYear %in% y2yResults$elkYear1 | 
@@ -329,6 +333,7 @@ fwrite(yearlyBalance, "balancing.csv")
 
 ```
 
+taking lines from each of the tactics to use in figure
 
 ``` {r basic movement tactic lines for map, echo = F, eval = F}
 y2yResults <- y2y %>% mutate(elkYear1 = paste(elk, year1, sep = "_"), elkYear2 = paste(elk, year2, sep = "_"))
@@ -355,6 +360,8 @@ st_write(lines, "mapFigs/data", "lines", driver = "ESRI Shapefile", append = F)
 
 ```
 
+making switching figure
+
 ``` {r alluvial, echo = F, eval = F}
 forAlluv <- y2y %>% group_by(strat1, strat2) %>% dplyr::summarise(n = n()) %>% filter(strat1 != strat2)
 
@@ -369,7 +376,7 @@ ggplot(forAlluv,
   geom_alluvium(aes(fill = strat1), width = 1/12) +
   geom_stratum(width = 1/12, fill = "black", color = "grey") +
   geom_label(stat = "stratum", 
-             aes(label = after_stat(paste0(stratum, ": ", c(41, 6, 17, 41, 45, 6, 21, 33) ))), 
+             aes(label = after_stat(paste0(stratum, ": ", c(41, 6, 17, 41, 45, 6, 21, 33), c("\n n = 251", "\n n = 23", "\n n = 91", "\n n = 108", "", "", "", "")))), 
              family = "Century Gothic") +
   theme_bw() + ylab("") + xlab("") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -451,6 +458,7 @@ ggplot(tacticDist) + geom_bar(aes(fill = tactic, y = count, x = herd), position 
 
 ```
 
+not enough data for resident model
 
 ```{r model glm AIC just resident, echo = F, eval = F}
 #only six switches, so not enough to fit models
@@ -724,6 +732,7 @@ ggplot(tacticDist) + geom_bar(aes(fill = tactic, y = count, x = herd), position 
 
 ```
 
+elevational migrant model
 
 ```{r model glm AIC just EM, echo = F, eval = F}
 y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
@@ -1041,6 +1050,7 @@ ggpubr::ggarrange(dev, div, interaction, labels = c("A.", "B.", "C."))
 
 ```
 
+short distance migrants model
 
 ```{r model glm AIC just SDM, echo = F, eval = F}
 y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
@@ -1227,6 +1237,7 @@ ggplot(newdata5) +
 
 ```
 
+ldm model
 
 ```{r model glm AIC just LDM, echo = F, eval = F}
 y2y$winter2feedAccess <- as.character(y2y$winter2feedAccess)
@@ -1742,6 +1753,8 @@ ggplot(newdata3) +
 
 
 ```
+
+k means 3 class justification
 
 ```{r k-means supp info 1, echo=FALSE}
 

@@ -7,7 +7,7 @@ library(raster)
 library(data.table)
 library(tripack)
 
-setwd("C:/Users/MiddletonLab/Desktop/Gabe/Box Sync/Elk/Switching3")
+setwd("~/Documents/GitHub/Plasticity1/Switching3")
 
 multibursts <- fread("movementData/multiburstsNC.csv")
 multibursts$acquisition_time <- ymd_hms(multibursts$acquisition_time)
