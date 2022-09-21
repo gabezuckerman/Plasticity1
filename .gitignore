@@ -43,7 +43,6 @@ vignettes/*.pdf
 covariates/crop/data
 covariates/development/data
 covariates/ranch/data
-covariates
 covariates/conspecific
 covariates/private
 movementData
