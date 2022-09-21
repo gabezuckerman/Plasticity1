@@ -44,6 +44,7 @@ covariates/crop/data
 covariates/development/data
 covariates/ranch/data
 covariates/snow
+covariates/conspecific
 covariates/private
 movementData
 Switching3/movementData
@@ -57,6 +58,19 @@ gathering_timing_avery.R
 ~$nal Draft updated ORS.docx
 unusedPlasticityModels.Rmd
 plasticity.Rmd
+plasticity.html
+papers
+alluvial.jpeg
+SDMplots.jpeg
+balancing.csv
+emModSel.txt
+emPlots.jpeg
+herdTactDistSuppTable.txt
+ldmModSel.txt
+res.jpeg
+sdmModSel.txt
+trimmedDay2.mp4
+
 
 
 
