@@ -34,7 +34,7 @@ setwd("~/Documents/GitHub/Plasticity1")
 #where was this calculated?
 distances <- fread("movementData/distanceChanges.csv")
 
-timing <- fread("Switching3/timingData/finalTiming.csv", na.strings = "")
+timing <- fread("timingData/finalTiming.csv", na.strings = "")
 
 ```
 

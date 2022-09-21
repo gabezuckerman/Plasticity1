@@ -43,7 +43,7 @@ vignettes/*.pdf
 covariates/crop/data
 covariates/development/data
 covariates/ranch/data
-covariates/snow
+covariates
 covariates/conspecific
 covariates/private
 movementData
@@ -69,6 +69,7 @@ ldmModSel.txt
 res.jpeg
 sdmModSel.txt
 trimmedDay2.mp4
+mapFigs
 
 
 
