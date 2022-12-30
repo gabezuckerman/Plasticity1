@@ -371,7 +371,7 @@ forAlluv <- y2y %>% group_by(strat1, strat2) %>% dplyr::summarise(n = n()) %>% f
 #LDM: 11/86=13%
 #SDM: 41/256=16%
 
-ggplot(forAlluv,
+alluv <- ggplot(forAlluv,
        aes(y = n, axis1 = strat1, axis2 = strat2)) +
   geom_alluvium(aes(fill = strat1), width = 1/12) +
   geom_stratum(width = 1/12, fill = "black", color = "grey") +
@@ -397,10 +397,34 @@ ggplot(forAlluv,
   geom_text(x = 1.1, y = 100, label = "10", family = "Century Gothic")
 
 
+ggsave("/Users/gzuckerman/Desktop/alluvial.jpeg", alluv, dpi = 600)
 
 
 ```
 
+
+``` {r switch magnitude figure, echo = F, eval = F}
+y2y$switchType <- paste0(y2y$strat1, " to ", y2y$strat2)
+
+
+magnitude <- ggplot(y2y) + geom_segment(aes(x = 0, y = 0, xend = distanceDiff, yend= elevDiff), alpha = .2,
+                                 arrow = arrow(length = unit(0.05, "inches"))) +
+ 
+  geom_point(data = y2y %>% filter(strat1 == strat2), aes(x = distanceDiff, y = elevDiff), alpha = .1, color = "black") +
+   geom_point(data = y2y %>% filter(strat1 != strat2), aes(x = distanceDiff, y = elevDiff, color = strat1), alpha = .5) +
+    #geom_point(aes(x = 0, y = 0), color = "red", size = 4, alpha = .25) +
+  xlab("Difference in distance from year 1 to year 2") + 
+  ylab("Difference in elevation change from year 1 to year 2") +
+  geom_text(x = 40000, y = 2000, label = "Increased distance and  \n elevation change \n (31.2%)", size = 3) +
+  geom_text(x = 40000, y = -2400, label = "Increased distance and  \n decreased elevation change \n (19.2%)", size = 3) +
+  geom_text(x = -40000, y = -2000, label = "Decreased distance and  \n elevation change \n (30.8%)", size = 3) +
+  geom_text(x = -40000, y = 1000, label = "Decreased distance and  \n increased elevation change \n (18.8%)", size = 3) +
+  theme_bw() + scale_color_manual("Switches From", values = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a"))
+
+ggsave("/Users/gzuckerman/Desktop/magnitude.jpeg", magnitude, dpi = 600)
+
+
+```
 
 ``` {r vifTesting, echo = FALSE, eval = FALSE}
 #all two-way combinations of variables pass VIF threshold test
@@ -955,7 +979,7 @@ newdata1 <- rbindlist(list(newdata1, minDiv, maxDiv)) %>%
 
 newdata1$group <- factor(newdata1$group, levels = c("low", "avg.", "high"), labels = c("Low", "Average", "High"))
 
-ggplot(newdata1 %>% rename(`Herd-level diversity` = group)) + 
+emplot <- ggplot(newdata1 %>% rename(`Herd-level diversity` = group)) + 
   geom_line(aes(x = winter2propDev, y = pred, color = `Herd-level diversity`), alpha = .8) +
   geom_ribbon(aes(x = winter2propDev, y = pred, ymin = ll,ymax = ul, fill = `Herd-level diversity`), alpha = 0.2) +
   ylab("Probability of switching") + 
@@ -966,6 +990,7 @@ ggplot(newdata1 %>% rename(`Herd-level diversity` = group)) +
   geom_rug(data = y2y %>% filter(strat1 == "LDM", switch == 0), aes(winter2propDev), sides = "b") +
   scale_color_manual(values = c("#1b9e77", "#d95f02", "#7570b3"), guide = F)
 
+ggsave("/Users/gzuckerman/Desktop/emplot.jpeg", emplot, dpi = 600)
 
 
 
@@ -1460,7 +1485,7 @@ newdata1 <- rbindlist(list(newdata1, minDiv, maxDiv)) %>%
 
 newdata1$group <- factor(newdata1$group, levels = c("low", "avg.", "high"), labels = c("Low", "Average", "High"))
 
-ggplot(newdata1 %>% rename(`Herd-level diversity` = group)) + 
+ldmplot <- ggplot(newdata1 %>% rename(`Herd-level diversity` = group)) + 
   geom_line(aes(x = maxSnow, y = pred, color = `Herd-level diversity`), alpha = .8) +
   geom_ribbon(aes(x = maxSnow, y = pred, ymin = ll,ymax = ul, fill = `Herd-level diversity`), alpha = 0.2) +
   ylab("Probability of switching") + 
@@ -1470,6 +1495,9 @@ ggplot(newdata1 %>% rename(`Herd-level diversity` = group)) +
   geom_rug(data = y2y %>% filter(strat1 == "LDM", switch == 1), aes(maxSnow), sides = "t") +
   geom_rug(data = y2y %>% filter(strat1 == "LDM", switch == 0), aes(maxSnow), sides = "b") +
   scale_color_manual(values = c("#1b9e77", "#d95f02", "#7570b3"), guide = F)
+
+
+ggsave("/Users/gzuckerman/Desktop/ldmplot.jpeg", ldmplot, dpi = 600)
 
 
 #diversity
