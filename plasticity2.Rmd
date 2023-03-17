@@ -98,17 +98,17 @@ allIndYears <- rbind(allIndYears %>% filter(class == "R"), nonRes)
 library(extrafont)
 font_import()
 loadfonts()
-ggplot(allIndYears) + geom_point(aes(dists, absElev, color = class), alpha = .3) +
-  ylab("Abosulte elevation change (m)") +   xlab("Geographic distance (m)") + 
-  geom_text(x=25000, y=1100, label="EM (21.9%)", color = "#1b9e77", size = 9, family = "Century Gothic") +
-  geom_text(x=25000, y=400, label="SDM (53.7%)", color = "#e7298a", size = 9, family = "Century Gothic") +
-  geom_text(x = 75000, y = 1000, label = "LDM (19.6%)", color = "#d95f02", size = 9, family = "Century Gothic") + 
-  geom_text(x = 18000, y = 0, label = "R (4.8%)", color = "#7570b3", size = 9, family = "Century Gothic") +
-  theme_bw() + theme(legend.position = "none", text=element_text(size=16, family = "Century Gothic"), 
+p <- ggplot(allIndYears) + geom_point(aes(dists, absElev, color = class), alpha = .3) +
+  ylab("Abosolute elevation change (m)") +   xlab("Geographic distance (m)") + 
+  geom_text(x=25000, y=1100, label="EM (21.9%)", color = "#1b9e77", size = 4, family = "Century Gothic") +
+  geom_text(x=50000, y=150, label="SDM (53.7%)", color = "#e7298a", size = 4, family = "Century Gothic") +
+  geom_text(x = 75000, y = 1000, label = "LDM (19.6%)", color = "#d95f02", size = 4, family = "Century Gothic") + 
+  geom_text(x = 18000, y = 0, label = "R (4.8%)", color = "#7570b3", size = 4, family = "Century Gothic") +
+  theme_bw() + theme(legend.position = "none", text=element_text(size=12, family = "Century Gothic"), 
                      plot.title = element_text(hjust = 0.5)) + 
   scale_color_manual(values = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a")) + ggtitle("Migratory Portfolio")
   
-
+ggsave("/Users/gzuckerman/Desktop/test.jpg", p, dpi=600, height=9.7, width = 8.2, units = "cm")
 
 ```
 
